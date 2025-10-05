@@ -110,6 +110,69 @@ This formulation guarantees that merging consolidates spatially and semantically
 
 ---
 
+## 📘 Documentation
+
+For a detailed algorithmic explanation, see:  
+[**algorithm_overview.md**](algorithm_overview.md)
+
+Changelog:  
+[**changelog.md**](changelog.md)
+
+---
+
+## 🧩 Installation
+
+Clone this repository and install dependencies:
+
+```bash
+# Clone the repository
+git clone https://github.com/mihajlov39547/spatial-mask-merging.git
+cd spatial-mask-merging
+
+# (Optional) create a virtual environment
+python3 -m venv .venv
+source .venv/bin/activate # bash
+or
+.venv\Scripts\activate # windows
+
+# Install required dependencies
+pip install -r requirements.txt
+
+---
+
+## 🚀 Sample Usage
+
+### Basic Example
+
+```python
+from smm.smm import SpatialMaskMerging
+from smm.predictions import SMMPrediction
+
+# Example input masks (numpy boolean arrays)
+mask1 = ...
+mask2 = ...
+mask3 = ...
+
+# Create prediction container
+preds = [
+    SMMPrediction(mask=mask1, score=0.91, label="car"),
+    SMMPrediction(mask=mask2, score=0.88, label="car"),
+    SMMPrediction(mask=mask3, score=0.82, label="car"),
+]
+
+# Initialize algorithm (use "ilp" or "greedy")
+smm = SpatialMaskMerging(mode="ilp")
+
+# Run merging
+merged = smm.merge(preds)
+
+# Access outputs
+for cluster in merged.clusters:
+    print(cluster.merged_mask.shape, cluster.confidence)
+```
+
+---
+
 ## Citation
 If you use this work, please cite:
 ```bibtex

@@ -51,6 +51,38 @@ Optimal values are **application-dependent** and vary based on object density, s
 
 ---
 
+## Merging Function Details
+
+The merging function consolidates clustered detections into unified instances, ensuring semantic and spatial consistency across merged groups.
+
+Given a valid merge group  
+**A = {o₁, o₂, …, oₖ}**, where each object **oᵢ = (Mᵢ, bᵢ, sᵢ, ℓᵢ)** consists of a binary mask, bounding box, confidence score, and shared label, the merging function **Φ(A)** produces a new object **oₙₑw** as follows:
+
+1. **Mask Fusion:**  
+   Combine all masks using a pixel-wise logical OR.  
+   This ensures that all covered pixels remain preserved in the merged result.
+
+2. **Bounding Box Update:**  
+   Compute the minimal axis-aligned rectangle enclosing all boxes in **A**.
+
+3. **Score Aggregation:**  
+   Compute the merged confidence either as an arithmetic mean or as a mask-size-weighted mean.
+
+4. **Class Label Assignment:**  
+   Since all members of **A** share the same class label, the merged object inherits this label.
+
+The resulting merged object is  
+**oₙₑw = (Mₙₑw, bₙₑw, sₙₑw, ℓₙₑw)**.
+
+### Properties of Φ(A)
+- **Idempotence:** Φ({o}) = o  
+- **Symmetry:** Invariant to the ordering of elements in A  
+- **Mask Preservation:** Ensures no loss of coverage, i.e., ⋃ₜ Mᵢₜ ⊆ Mₙₑw  
+
+This formulation guarantees that merging consolidates spatially and semantically consistent detections into coherent instances, improving robustness of tiled inference without chained or inconsistent groupings.
+
+---
+
 ## Citation
 If you use this work, please cite:
 ```bibtex

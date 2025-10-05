@@ -1,4 +1,9 @@
 # Spatial Mask Merging
+
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
+![Python](https://img.shields.io/badge/python-3.8+-blue.svg)
+![Paper DOI](https://img.shields.io/badge/DOI-10.3390/math13193079-red.svg)
+
 Official implementation of the Spatial Mask Merging (SMM) algorithm, a post-processing algorithm designed to improve instance segmentation in high-resolution images. It addresses the limitations of traditional tiling methods by merging fragmented masks using graph clustering and spatial metrics.
 
 ---
@@ -58,3 +63,8 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+## Acknowledgments
+
+This research was conducted as part of the development of advanced post-processing techniques for high-resolution aerial imagery segmentation.
+

@@ -113,10 +113,10 @@ This formulation guarantees that merging consolidates spatially and semantically
 ## 📘 Documentation
 
 For a detailed algorithmic explanation, see:  
-[**algorithm_overview.md**](algorithm_overview.md)
+[**algorithm_overview.md**](docs/algorithm_overview.md)
 
 Changelog:  
-[**changelog.md**](changelog.md)
+[**changelog.md**](docs/changelog.md)
 
 ---
 

@@ -11,11 +11,43 @@ Official implementation of the Spatial Mask Merging (SMM) algorithm, a post-proc
 ---
 
 ## Highlights
-- ⚡ Spatially optimized mask merging using R-tree indexing for efficient spatial queries
-- 🧩 Graph-based mask clustering for robust merging of overlapping and adjacent instances
-- 🧪 Pixel-level overlap and boundary distance metrics ensuring precise spatial consistency
-- 📦 Compatible with SAHI and other tiling-based inference pipelines for large-scale segmentation
-- 📈 Validated on the iSAID benchmark demonstrating significant precision and consistency gains
+- ⚡ Spatially optimized mask merging using R-tree indexing for efficient spatial queries  
+- 🧩 Graph-based mask clustering for robust merging of overlapping and adjacent instances  
+- 🧪 Pixel-level overlap and boundary distance metrics ensuring precise spatial consistency  
+- 🔗 Anti-chaining constraint preventing indirect merges between dissimilar objects  
+- 📦 Compatible with SAHI and other tiling-based inference pipelines for large-scale segmentation  
+- 📈 Validated on the iSAID benchmark demonstrating significant precision and consistency gains  
+
+---
+
+## Algorithm Overview
+The Spatial Mask Merging (SMM) algorithm formulates instance mask refinement as a **global correlation clustering problem**.  
+Predicted masks are represented as vertices in a weighted graph, where edges encode spatial and semantic compatibility based on distance, IoU, and detection confidence.  
+An R-tree spatial index restricts candidate relations, ensuring logarithmic-time neighbor retrieval even for dense predictions.  
+A clustering penalty (λ) balances over- and under-merging, while an anti-chaining threshold (γ) enforces mutual consistency across clusters, preventing indirect merges through intermediate instances.
+
+---
+
+## Algorithm Parameters
+
+Spatial thresholds, edge weighting factors, and clustering penalties govern the behavior of the **Spatial Mask Merging (SMM)** algorithm. These parameters control the balance between over-merging and under-merging, spatial sensitivity, and candidate mask selection.
+
+The parameters **τ_d**, **τ_i**, and **ρ** primarily regulate *candidate generation*, while the edge-weight coefficients **β₁**, **β₂**, **β₃**, the *correlation clustering penalty* **λ**, and the *anti-chaining threshold* **γ** influence *partitioning resolution*.  
+
+Optimal values are **application-dependent** and vary based on object density, shape complexity, and whether inference is performed using tiling or full-image processing.
+
+### Tunable Hyperparameters
+
+| **Parameter** | **Description** | **Suggested Range** |
+|----------------|-----------------|----------------------|
+| **τ_d** | Distance scale (in pixels) used to normalize spatial proximity in edge weights *w_ij*. | 5–30 |
+| **τ_i** | IoU threshold acting as a normalizing factor for overlap contribution. | 0.1–0.9 |
+| **ρ** | R-tree search radius (in pixels) for candidate edge generation. | 10–50 |
+| **β₁** | Weight of the distance contribution in *w_ij*. | 0.2–0.4 |
+| **β₂** | Weight of the IoU contribution in *w_ij*. | 0.4–0.6 |
+| **β₃** | Weight of the confidence contribution in *w_ij*. | 0.1–0.3 |
+| **λ** | Correlation clustering penalty controlling over-merging vs. under-merging. | 0.1–2.0 |
+| **γ** | Pairwise threshold enforcing the anti-chaining constraint. | 0.3–0.7 |
 
 ---
 

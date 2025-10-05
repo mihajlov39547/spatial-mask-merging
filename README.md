@@ -1,5 +1,5 @@
 # Spatial Mask Merging
-**Marko Mihajlović** and **Marina Marjanović**  
+**Marko Mihajlović**, with contributions from **Marina Marjanović**  
 *Faculty of Informatics and Computing, Singidunum University, Belgrade, Serbia*
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
@@ -262,7 +262,7 @@ If you use this work, please cite:
 
 ## Copyright
 
-Copyright (c) 2025 Marko Mihajlović and Marina Marjanovic
+Copyright (c) 2025 Marko Mihajlović, with contributions from Marina Marjanović
 
 This repository provides the official implementation of the Spatial Mask Merging (SMM) algorithm.
 All source code is distributed under the terms of the MIT License.

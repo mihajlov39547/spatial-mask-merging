@@ -19,7 +19,7 @@ setup(
     description="Spatial Mask Merging (SMM) — paper-faithful instance mask post-processing with exact correlation clustering",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    author="Marko Mihajlović",
+    author="Marko Mihajlović with contributions from Marina Marjanović",
     author_email="",
     url="https://github.com/mihajlov39547/spatial-mask-merging",
     license="MIT",

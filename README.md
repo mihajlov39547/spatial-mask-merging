@@ -38,6 +38,10 @@ spatial-mask-merging/
 │   ├── rtree_utils.py             # R-tree spatial indexing utilities
 │   └── smm.py                     # Main SMM algorithm (ILP + Greedy)
 │
+├── tools/                        # Utilities (training, tuning, evaluation)
+│   ├── optimize_smm.py           # Optuna-based hyperparameter optimizer for SMM
+│   └── evaluation.py             # Batch evaluator (GPU-accelerated if PyTorch is available)
+│
 ├── LICENSE                        # MIT License
 ├── README.md                      # Project readme (this file)
 ├── requirements.txt               # Python dependencies
@@ -169,13 +173,13 @@ pip install -r requirements.txt
 
 ## 🚀 Sample Usage
 
-### Basic Example
+### 1) Core SMM (Python API)
 
 ```python
 from smm.smm import SpatialMaskMerging
 from smm.predictions import SMMPrediction
 
-# Example input masks (numpy boolean arrays)
+# Boolean numpy masks from your model
 mask1 = ...
 mask2 = ...
 mask3 = ...
@@ -187,15 +191,55 @@ preds = [
     SMMPrediction(mask=mask3, score=0.82, label="car"),
 ]
 
-# Initialize algorithm (use "ilp" or "greedy")
-smm = SpatialMaskMerging(mode="ilp")
+# Choose backend: "ilp" (exact) or "greedy" (approximate)
+smm = SpatialMaskMerging(mode="ilp", iou_weight=1.0, dist_weight=0.5, similarity_threshold=0.4)
 
-# Run merging
 merged = smm.merge(preds)
+for obj in merged:
+    print(obj.label, obj.score)
+```
 
-# Access outputs
-for cluster in merged.clusters:
-    print(cluster.merged_mask.shape, cluster.confidence)
+---
+
+### 2) Hyperparameter Optimization (Optuna)
+
+Run the Bayesian optimizer to tune SMM hyperparameters on a directory of prediction JSONs and matching ground-truth JSONs.
+
+```bash
+# From repo root
+python tools/optimize_smm.py   --pred_dir /path/to/preds_json   --gt_dir /path/to/gt_json   --img_dir /path/to/images   --out_dir ./opt_results   --mode ilp   --trials 30
+```
+
+**Outputs (under `--out_dir`):**
+- `best_params_ilp.json` — best hyperparameters found for ILP mode (filename includes mode).
+- `smm_ilp_hparam_importance.json` and `.pdf` — parameter importances.
+- `smm_ilp_optuna_trials.csv` — trials log with metrics and timings.
+
+> Switch `--mode greedy` to optimize the greedy backend’s parameters instead.
+
+---
+
+### 3) Batch Evaluation
+
+Evaluate a directory of *merged prediction JSONs* (e.g., the outputs after running SMM) against ground-truth:
+
+```bash
+python tools/evaluation.py   --pred_dir /path/to/merged_preds_json   --gt_dir /path/to/gt_json   --img_dir /path/to/images   --out_csv ./results/eval_ilp.csv   --iou_thr 0.5   --downscale 4
+```
+
+**Notes:**
+- Uses GPU if PyTorch with CUDA is available; otherwise runs on CPU.
+- `--downscale` reduces mask resolution for faster evaluation / lower VRAM.
+- Metrics written to `--out_csv`: Precision, Recall, F1, Dice, PQ, Avg Fragments, Count Error, Mean Error (GPU path).
+
+---
+
+### 4) Minimal Requirements
+
+```bash
+pip install -r requirements.txt
+# Optional extras for speed/ILP:
+pip install optuna torch pulp rtree opencv-python-headless matplotlib
 ```
 
 ---

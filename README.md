@@ -2,6 +2,7 @@
 **Marko Mihajlović**, with contributions from **Marina Marjanović**  
 *Faculty of Informatics and Computing, Singidunum University, Belgrade, Serbia*
 
+[![Release](https://img.shields.io/badge/release-v0.1.0--alpha-white.svg)](https://github.com/mihajlov39547/spatial-mask-merging/releases/tag/v0.1.0-alpha)
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 ![Python](https://img.shields.io/badge/python-3.8+-blue.svg)
 ![Paper DOI](https://img.shields.io/badge/DOI-10.3390/math13193079-red.svg)

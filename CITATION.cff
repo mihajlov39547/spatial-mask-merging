@@ -1,0 +1,28 @@
+cff-version: 1.2.0
+title: "Spatial Mask Merging (SMM)"
+message: "If you use this software, please cite it as below."
+type: software
+authors:
+  - family-names: "Mihajlović"
+    given-names: "Marko"
+    affiliation: "Faculty of Informatics and Computing, Singidunum University, Belgrade, Serbia"
+  - family-names: "Marjanović"
+    given-names: "Marina"
+    affiliation: "Contributor"
+version: "0.1.0-alpha"
+license: "MIT"
+repository-code: "https://github.com/mihajlov39547/spatial-mask-merging"
+url: "https://mihajlov39547.github.io/spatial-mask-merging/"
+abstract: >
+  Spatial Mask Merging (SMM) is an open-source implementation of ILP-based correlation clustering
+  for merging overlapping instance segmentation masks across tiled detections. Designed for remote
+  sensing and aerial imagery research, SMM provides exact optimization and evaluation tools.
+date-released: "2025-10-05"
+keywords:
+  - instance segmentation
+  - mask merging
+  - correlation clustering
+  - ILP
+  - remote sensing
+  - object detection
+  - spatial analysis

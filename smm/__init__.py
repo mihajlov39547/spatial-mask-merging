@@ -2,6 +2,7 @@
 # Public package API for Spatial Mask Merging (SMM).
 
 from .smm import SpatialMaskMerger, smm_merge
+from .predictions import SMMPrediction, SMMAnnotation
 
 __all__ = [
     "SpatialMaskMerger",

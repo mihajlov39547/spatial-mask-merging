@@ -12,6 +12,9 @@ import networkx as nx
 from scipy.ndimage import binary_erosion
 from scipy.spatial.distance import cdist
 
+# Standardized input container (only accepted public input)
+from .predictions import SMMPrediction
+
 try:
     import pulp  # ILP solver
 except Exception as e:
@@ -28,7 +31,8 @@ try:
 except Exception:
     RTreeIndex = None
 
-# ------------------------------- Geometry & helpers -------------------------------
+
+# =============================== Geometry & helpers ===============================
 
 def bbox_l2_distance(b1: Tuple[float, float, float, float],
                      b2: Tuple[float, float, float, float]) -> float:
@@ -75,9 +79,13 @@ def boundary_pixels(mask: np.ndarray) -> np.ndarray:
     m = mask.astype(bool)
     if not m.any():
         return np.zeros((0, 2), dtype=np.float32)
-    eroded = binary_erosion(m, structure=np.array([[0,1,0],
-                                                   [1,1,1],
-                                                   [0,1,0]], dtype=bool), border_value=False)
+    eroded = binary_erosion(
+        m,
+        structure=np.array([[0, 1, 0],
+                            [1, 1, 1],
+                            [0, 1, 0]], dtype=bool),
+        border_value=False
+    )
     bnd = np.logical_and(m, np.logical_not(eroded))
     coords = np.argwhere(bnd)
     return coords.astype(np.float32)
@@ -203,13 +211,8 @@ class SpatialMaskMerger:
       4) Extract clusters by connected components of 'must-link' edges (x_ij == 0).
       5) Merge masks Φ(A): pixel OR, bbox union, score aggregation (mean or area-weighted).
 
-    Expected object schema for 'objects':
-      {
-        "mask": np.ndarray[H,W] of bool,
-        "bbox": (x1,y1,x2,y2),
-        "score": float,
-        "label": Any (hashable)
-      }
+    Public input:
+      - SMMPrediction (standardized container). No other input types are accepted.
 
     Parameters (defaults match paper ranges; tune per dataset):
       tau_d: float = 15.0
@@ -219,9 +222,9 @@ class SpatialMaskMerger:
       beta2: float = 1.0
       beta3: float = 0.5
       gamma: float = 0.5
-      lambda: float = 1.0                      # correlation clustering penalty λ
+      lambda: float = 1.0
       score_threshold: float = 0.0
-      score_aggregation: {"mean","area_mean"}  # score pooling in Φ(A), default "mean"
+      score_aggregation: {"mean","area_mean"}
     """
 
     def __init__(self, **kwargs):
@@ -241,11 +244,33 @@ class SpatialMaskMerger:
 
     # ------------------------- Public API -------------------------
 
-    def merge(self, objects: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def merge(self,
+              prediction: SMMPrediction,
+              image_size_hw: Tuple[int, int],
+              *,
+              prefer_segmentation: bool = True,
+              recompute_bbox: bool = True,
+              min_polygon_points: int = 3) -> List[Dict[str, Any]]:
         """
-        Run paper-faithful SMM on a list of detection objects, returning merged objects.
+        Run paper-faithful SMM. Accepts only SMMPrediction and returns merged objects.
+
+        Parameters
+        ----------
+        prediction           : standardized per-image container
+        image_size_hw        : (H, W) full-frame for rasterization
+        prefer_segmentation  : polygons preferred when available
+        recompute_bbox       : recompute tight bbox from rasterized mask
+        min_polygon_points   : ignore polygons with fewer points
         """
         _check_deps()
+        if not isinstance(prediction, SMMPrediction):
+            raise TypeError("SpatialMaskMerger.merge accepts only SMMPrediction.")
+        objects = prediction.to_smm_objects(
+            image_size_hw=image_size_hw,
+            prefer_segmentation=prefer_segmentation,
+            recompute_bbox=recompute_bbox,
+            min_polygon_points=min_polygon_points,
+        )
         if len(objects) == 0:
             return []
 
@@ -284,7 +309,7 @@ class SpatialMaskMerger:
             C_ok = compatible_pair(oi, oj, D_ij, I_ij, w_ij, self.params)
             edges.append((i, j, D_ij, I_ij, w_ij, C_ok))
 
-        # 4) Solve correlation clustering ILP with triangle inequalities and cannot-links
+        # 4) Solve exact correlation clustering (ILP)
         clusters = self._solve_exact_cc_ilp(len(objects), edges)
 
         # 5) Merge per cluster (Φ(A))
@@ -294,22 +319,17 @@ class SpatialMaskMerger:
 
         for comp in clusters:
             group = [objects[u] for u in comp]
-            masks = [g["mask"] for g in group]
-            merged_mask = merge_masks(masks)
+            merged_mask = merge_masks([g["mask"] for g in group])
             merged_bbox = mask_to_bbox(merged_mask)
 
             scores = np.array([float(g["score"]) for g in group], dtype=np.float32)
             if score_agg == "area_mean":
                 areas = np.array([float(g["mask"].sum()) for g in group], dtype=np.float32)
-                if areas.sum() > 0:
-                    s_new = float((scores * areas).sum() / areas.sum())
-                else:
-                    s_new = float(scores.mean())
+                s_new = float((scores * areas).sum() / areas.sum()) if areas.sum() > 0 else float(scores.mean())
             else:
                 s_new = float(scores.mean())
 
-            label_new = group[0]["label"]  # all same by construction
-            out = {"mask": merged_mask, "bbox": merged_bbox, "score": s_new, "label": label_new}
+            out = {"mask": merged_mask, "bbox": merged_bbox, "score": s_new, "label": group[0]["label"]}
             if out["score"] >= score_thresh:
                 merged.append(out)
 
@@ -333,28 +353,17 @@ class SpatialMaskMerger:
         """
         lam = float(self.params.get("lambda_", self.params.get("lambda", 1.0)))
 
-        # Map existing pairs for quick access
-        pair_index = {(i, j): k for k, (i, j, *_rest) in enumerate(edges)}
-
-        # Create ILP problem
-        prob = pulp.LpProblem("SMM_CorrelationClustering", pulp.LpStatusOptimal)
-
+        prob = pulp.LpProblem("SMM_CorrelationClustering", pulp.LpMinimize)
         # Decision vars for existing pairs only
         x_vars: Dict[Tuple[int, int], pulp.LpVariable] = {}
-        for (i, j, D_ij, I_ij, w_ij, C_ok) in edges:
-            x_vars[(i, j)] = pulp.LpVariable(f"x_{i}_{j}", lowBound=0, upBound=1, cat=pulp.LpBinary)
+        for (i, j, _D, _I, w_ij, _Cok) in edges:
+            x_vars[(i, j)] = pulp.LpVariable(f"x_{i}_{j}", 0, 1, cat=pulp.LpBinary)
 
         # Objective
-        obj_terms = []
-        for (i, j, D_ij, I_ij, w_ij, C_ok) in edges:
-            x = x_vars[(i, j)]
-            # cost for separated: w_ij * x
-            # cost for merged   : λ * (1 - w_ij) * (1 - x)
-            obj_terms.append(w_ij * x + lam * (1.0 - w_ij) * (1.0 - x))
-        prob += pulp.lpSum(obj_terms)
+        prob += pulp.lpSum([w_ij * x_vars[(i, j)] + lam * (1.0 - w_ij) * (1.0 - x_vars[(i, j)])
+                            for (i, j, _D, _I, w_ij, _Cok) in edges])
 
-        # Triangle inequalities for triples where all three pairs exist
-        # x_ij <= x_ik + x_kj  (for all distinct i<j<k)
+        # Triangle inequalities
         for i in range(n):
             for j in range(i + 1, n):
                 ij = (i, j)
@@ -366,38 +375,27 @@ class SpatialMaskMerger:
                     if ik in x_vars and jk in x_vars:
                         prob += x_vars[ij] <= x_vars[ik] + x_vars[jk]
 
-        # Anti-chaining hard constraints (cannot-links): if C_gamma(i,j) == False => x_ij = 1
-        for (i, j, D_ij, I_ij, w_ij, C_ok) in edges:
+        # Anti-chaining: cannot-link pairs must be separated
+        for (i, j, _D, _I, _w, C_ok) in edges:
             if not C_ok:
                 prob += x_vars[(i, j)] == 1
 
-        # Solve
-        status = prob.solve(pulp.PULP_CBC_CMD(msg=False))
-        if pulp.LpStatus[status] != "Optimal":
-            # Fall back: treat x_ij < 0.5 as merged; still return something reasonable
-            pass
-
-        # Build must-link graph for x_ij == 0
+        # Solve and build must-link graph
+        prob.solve(pulp.PULP_CBC_CMD(msg=False))
         G = nx.Graph()
         G.add_nodes_from(range(n))
         for (i, j, *_rest) in edges:
             x_val = x_vars[(i, j)].value()
-            if x_val is None:
-                continue
-            if x_val <= 0.5:  # merged
+            if x_val is not None and x_val <= 0.5:
                 G.add_edge(i, j)
 
-        # Connected components = clusters
         components = [sorted(list(c)) for c in nx.connected_components(G)]
-        # Add isolated nodes missing entirely (if any) — though all candidate nodes were added above
         covered = set(u for comp in components for u in comp)
         for u in range(n):
             if u not in covered:
                 components.append([u])
 
-        # Final intra-cluster validity (strict anti-chaining within cluster)
-        # Ensure every cluster satisfies C_gamma for all internal pairs.
-        # If a violation is found, split the cluster using a simple repair (cannot-link edges cut).
+        # Enforce strict anti-chaining inside clusters
         components = self._repair_clusters_with_antichain(components, edges)
         return components
 
@@ -422,25 +420,24 @@ class SpatialMaskMerger:
                 continue
             H = nx.Graph()
             H.add_nodes_from(comp)
-            # connect only pairs that are C_ok=True
-            for a_idx in range(len(comp)):
-                for b_idx in range(a_idx + 1, len(comp)):
-                    u, v = comp[a_idx], comp[b_idx]
-                    ok = C_ok_map.get((u, v), True)  # if missing, default to True
-                    if ok:
+            for a in range(len(comp)):
+                for b in range(a + 1, len(comp)):
+                    u, v = comp[a], comp[b]
+                    if C_ok_map.get((u, v), True):
                         H.add_edge(u, v)
-            # Components of H are valid clusters
             for sub in nx.connected_components(H):
                 repaired.append(sorted(list(sub)))
         return repaired
 
 
-# ------------------------- Convenience API -------------------------
+# =============================== Convenience API ===============================
 
-def smm_merge(objects: List[Dict[str, Any]], **kwargs) -> List[Dict[str, Any]]:
+def smm_merge(prediction: SMMPrediction,
+              image_size_hw: Tuple[int, int],
+              **kwargs) -> List[Dict[str, Any]]:
     """
-    Functional wrapper around SpatialMaskMerger for quick use:
-        merged = smm_merge(objects, tau_d=15.0, tau_i=0.5, rho=30.0, ...)
+    Convenience wrapper: identical to SpatialMaskMerger.merge(...).
+    Accepts only SMMPrediction.
     """
     merger = SpatialMaskMerger(**kwargs)
-    return merger.merge(objects)
+    return merger.merge(prediction, image_size_hw)

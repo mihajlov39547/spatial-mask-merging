@@ -1,12 +1,11 @@
 # smm/predictions.py
 # Standardized prediction container for Spatial Mask Merging (SMM).
-# This class enforces the exact JSON structure you provided and
-# offers utilities to convert into the internal SMM schema
-# (list of {"mask","bbox","score","label"} dicts).
+# This class enforces the exact JSON structure and 
+# converts to the internal SMM object schema used by the solver.
 
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Tuple, Union, Optional
+from typing import Any, Dict, List, Tuple, Union
 import numpy as np
 from PIL import Image, ImageDraw
 
@@ -14,11 +13,11 @@ from PIL import Image, ImageDraw
 # Types
 # -----------------------------
 
-BBox = Tuple[float, float, float, float]          # (x1, y1, x2, y2), pixel coords
+BBox = Tuple[float, float, float, float]            # (x1, y1, x2, y2)
 Point = Tuple[Union[int, float], Union[int, float]]
-Polygon = List[Point]                             # [[x,y], [x,y], ...]
+Polygon = List[Point]                               # [[x,y], [x,y], ...]
 Polygons = List[Polygon]
-SizeHW = Tuple[int, int]                          # (H, W)
+SizeHW = Tuple[int, int]                            # (H, W)
 
 
 # -----------------------------
@@ -33,7 +32,7 @@ class SMMAnnotation:
       - type        : class name (string)
       - class_id    : class id (int)
       - confidence  : float in [0,1]
-      - bbox        : (x1,y1,x2,y2) in pixels
+      - bbox        : (x1,y1,x2,y2) in pixels (inclusive bounds)
       - segmentation: list of polygons; each polygon is a list of [x,y] pairs
     """
     type: str
@@ -49,32 +48,21 @@ class SMMAnnotation:
         if not (0.0 <= float(self.confidence) <= 1.0):
             # We do not clamp silently; let caller decide
             raise ValueError(f"Confidence must be in [0,1], got {self.confidence}.")
-        # Basic segmentation sanity: allow empty list (then bbox can be used as fallback)
-        for poly in self.segmentation:
-            if len(poly) < 3:
-                # We'll allow, but it won't contribute area when rasterized
-                pass
+        # permit degenerate polygons; they will rasterize to empty masks
 
 
 @dataclass
 class SMMPrediction:
     """
-    Standardized per-image prediction record to be used as the *only* input
-    type for SMM. This mirrors your JSON schema exactly and provides:
-
-      - add_annotation(...)
-      - to_json_dict()
-      - from_json_dict(...)
-      - to_smm_objects((H, W), ...)  -> list of dicts for SMM core
-
+    Standardized per-image prediction record.
     Fields:
-      - image_name: file name of the image
+      - image_name: file name of the image (string)
       - annotations: list[SMMAnnotation]
     """
     image_name: str
     annotations: List[SMMAnnotation] = field(default_factory=list)
 
-    # ------------- Creation / I/O -------------
+    # ---------------- Creation / I/O ----------------
 
     def add_annotation(self,
                        type: str,
@@ -87,7 +75,7 @@ class SMMPrediction:
             class_id=int(class_id),
             confidence=float(confidence),
             bbox=(float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3])),
-            segmentation=[[(float(x), float(y)) for (x, y) in poly] for poly in segmentation]
+            segmentation=[[(float(x), float(y)) for (x, y) in poly] for poly in segmentation],
         )
         ann.validate()
         self.annotations.append(ann)
@@ -114,14 +102,13 @@ class SMMPrediction:
         }
 
     @staticmethod
-    def from_json_dict(d: Dict[str, Any]) -> SMMPrediction:
+    def from_json_dict(d: Dict[str, Any]) -> "SMMPrediction":
         """
         Construct from your standardized JSON record.
         """
         image_name = str(d.get("image_name", ""))
         anns_in = d.get("annotations", [])
-        anns: List=SMMAnnotation.__args__ if hasattr(SMMAnnotation, "__args__") else []  # type: ignore
-        anns = []
+        anns: List[SMMAnnotation] = []
         for a in anns_in:
             ann = SMMAnnotation(
                 type=str(a["type"]),
@@ -131,23 +118,22 @@ class SMMPrediction:
                       float(a["bbox"][2]), float(a["bbox"][3])),
                 segmentation=[
                     [(float(x), float(y)) for (x, y) in poly] for poly in a.get("segmentation", [])
-                ]
+                ],
             )
             ann.validate()
             anns.append(ann)
         return SMMPrediction(image_name=image_name, annotations=anns)
 
-    # ------------- Conversion to SMM core -------------
+    # ------------- Conversion to SMM core objects -------------
 
     def to_smm_objects(self,
                        image_size_hw: SizeHW,
                        *,
                        prefer_segmentation: bool = True,
                        recompute_bbox: bool = True,
-                       min_polygon_points: int = 3
-                       ) -> List[Dict[str, Any]]:
+                       min_polygon_points: int = 3) -> List[Dict[str, Any]]:
         """
-        Convert this standardized record into the internal SMM object list:
+        Convert to the internal SMM schema:
           [{"mask": bool(H,W), "bbox": (x1,y1,x2,y2), "score": float, "label": Any}, ...]
 
         Parameters
@@ -172,22 +158,15 @@ class SMMPrediction:
                 ann=ann,
                 image_size_hw=(H, W),
                 prefer_segmentation=prefer_segmentation,
-                min_polygon_points=min_polygon_points
+                min_polygon_points=min_polygon_points,
             )
-            # Bbox
-            if recompute_bbox:
-                bbox = self._tight_bbox_from_mask(mask)
-            else:
-                bbox = ann.bbox
-
-            # Compose object
-            obj = {
+            bbox = self._tight_bbox_from_mask(mask) if recompute_bbox else ann.bbox
+            objs.append({
                 "mask": mask,
                 "bbox": bbox,
                 "score": float(ann.confidence),
-                "label": int(ann.class_id) if isinstance(ann.class_id, int) else ann.type,
-            }
-            objs.append(obj)
+                "label": int(ann.class_id),  # use class_id as the canonical label
+            })
         return objs
 
     # ------------- Internals: rasterization & bbox -------------
@@ -207,14 +186,11 @@ class SMMPrediction:
             mask = SMMPrediction._polygons_to_mask(
                 polygons=ann.segmentation,
                 image_size_hw=(H, W),
-                min_polygon_points=min_polygon_points
+                min_polygon_points=min_polygon_points,
             )
-            # If polygons produced an empty mask (too small / degenerate), fallback to bbox.
-            if not mask.any():
-                return SMMPrediction._bbox_to_mask(ann.bbox, (H, W))
-            return mask
-        else:
-            return SMMPrediction._bbox_to_mask(ann.bbox, (H, W))
+            if mask.any():
+                return mask
+        return SMMPrediction._bbox_to_mask(ann.bbox, (H, W))
 
     @staticmethod
     def _polygons_to_mask(polygons: Polygons,

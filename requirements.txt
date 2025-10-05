@@ -3,3 +3,4 @@ scipy>=1.10
 networkx>=3.0
 pulp>=2.7
 rtree>=1.1.0
+Pillow>=9.0.0

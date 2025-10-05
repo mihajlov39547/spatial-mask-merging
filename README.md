@@ -40,6 +40,7 @@ spatial-mask-merging/
 │
 ├── tools/                        # Utilities (training, tuning, evaluation)
 │   ├── optimize_smm.py           # Optuna-based hyperparameter optimizer for SMM
+│   ├── visualization.py          # Visualize predictions or GT masks as PDFs for qualitative inspection
 │   └── evaluation.py             # Batch evaluator (GPU-accelerated if PyTorch is available)
 │
 ├── LICENSE                        # MIT License
@@ -234,7 +235,29 @@ python tools/evaluation.py   --pred_dir /path/to/merged_preds_json   --gt_dir /p
 
 ---
 
-### 4) Minimal Requirements
+## 4) Visualization
+
+Render prediction or ground-truth polygons onto source images and export as PDFs for visual inspection.
+
+#### Example (predictions):
+```bash
+python tools/visualization.py --pred_dir /path/to/pred_jsons --image_dir /path/to/images
+```
+
+#### Example (ground-truth):
+```bash
+python tools/visualization.py --gt_dir /path/to/gt_labels --image_dir /path/to/images
+```
+
+**Notes:**
+- Saves each visualization as `<image_name>_pred_visualization.pdf` or `_gt_visualization.pdf`.
+- Supports both JSON (prediction format) and TXT (label format) inputs.
+- Color map and class naming consistent with dataset definitions.
+- Useful for checking polygon alignment and merging results after SMM.
+
+---
+
+### 5) Minimal Requirements
 
 ```bash
 pip install -r requirements.txt

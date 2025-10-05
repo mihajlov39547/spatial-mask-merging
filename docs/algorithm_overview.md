@@ -1,6 +1,6 @@
 # Algorithm Overview — Spatial Mask Merging (SMM)
 
-**Author:** Marko Mihajlović with contributions from Marina Marjanović
+**Author:** Marko Mihajlović, with contributions from Marina Marjanović
 **License:** MIT  
 **Version:** 1.1.0  
 **Date:** 2025-10-05  

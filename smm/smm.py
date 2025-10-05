@@ -1,6 +1,6 @@
 # smm/smm.py
 # Paper-faithful Spatial Mask Merging (SMM) with exact correlation clustering (ILP).
-# Author: Marko Mihajlović with contributions from Marina Marjanović
+# Author: Marko Mihajlović, with contributions from Marina Marjanović
 # License: MIT
 
 from __future__ import annotations

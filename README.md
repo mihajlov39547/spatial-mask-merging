@@ -19,12 +19,39 @@ Official implementation of the Spatial Mask Merging (SMM) algorithm, a post-proc
 - 📈 Validated on the iSAID benchmark demonstrating significant precision and consistency gains  
 
 ---
-
 ## Algorithm Overview
-The Spatial Mask Merging (SMM) algorithm formulates instance mask refinement as a **global correlation clustering problem**.  
-Predicted masks are represented as vertices in a weighted graph, where edges encode spatial and semantic compatibility based on distance, IoU, and detection confidence.  
-An R-tree spatial index restricts candidate relations, ensuring logarithmic-time neighbor retrieval even for dense predictions.  
-A clustering penalty (λ) balances over- and under-merging, while an anti-chaining threshold (γ) enforces mutual consistency across clusters, preventing indirect merges through intermediate instances.
+
+The **Spatial Mask Merging (SMM)** algorithm performs instance mask refinement by modeling predictions as nodes in a weighted graph, where edge weights express spatial and semantic consistency. The merging process is global, optimizing all candidate relations jointly instead of applying local, greedy rules.
+
+### Main Components
+
+1. **Graph Construction:**  
+      Each predicted instance is treated as a vertex in a graph. Edges are established between masks that are spatially close, with edge weights reflecting three factors:  
+   - *Spatial proximity* — normalized by distance threshold **τ_d**  
+   - *Mask overlap* (IoU) — normalized by **τ_i**  
+   - *Confidence consistency* — influenced by detection scores  
+
+   The pairwise edge weight between instances *i* and *j* is computed as:
+
+   ```
+   w_ij = β₁ * (1 - D_ij / τ_d)_+ + β₂ * I_ij + β₃ * min(s_i, s_j)
+   ```
+
+   where  
+   - **D_ij** – boundary distance between masks *M_i* and *M_j*  
+   - **I_ij** – intersection-over-union (IoU) between masks  
+   - **s_i**, **s_j** – detection confidences of the respective instances  
+
+   The operator *(1 - D_ij / τ_d)_+* denotes the positive part of the normalized distance term (clamped at zero).  
+
+2. **Spatial Pruning via R-tree:**  
+   Neighboring masks are efficiently retrieved within a fixed search radius **ρ** using an R-tree spatial index. This ensures the algorithm remains scalable even with dense predictions.
+
+3. **Global Optimization:**  
+   Instance grouping is achieved using a correlation clustering objective that balances merging and separation penalties through the parameter **λ**. This provides globally consistent groupings rather than sequential local merges.
+
+4. **Anti-Chaining Constraint:**  
+   The anti-chaining threshold **γ** prevents indirect merging of incompatible objects, ensuring that all masks within a merged group are mutually compatible both geometrically and semantically.
 
 ---
 
@@ -51,7 +78,7 @@ Optimal values are **application-dependent** and vary based on object density, s
 
 ---
 
-## Merging Function Details
+## Mask Merging Function Details
 
 The merging function consolidates clustered detections into unified instances, ensuring semantic and spatial consistency across merged groups.
 

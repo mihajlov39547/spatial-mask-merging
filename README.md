@@ -19,6 +19,33 @@ Official implementation of the Spatial Mask Merging (SMM) algorithm, a post-proc
 - 📈 Validated on the iSAID benchmark demonstrating significant precision and consistency gains  
 
 ---
+
+## 🗂 Repository Structure
+
+```
+spatial-mask-merging/
+│
+├── docs/                         # Documentation and supporting materials
+│   ├── algorithm_overview.md      # Algorithm description and math overview
+│   ├── changelog.md               # Version history and updates
+│   └── citation.bib               # Reference for academic citation
+│
+├── examples/                      # Example scripts and notebooks
+│
+├── smm/                           # Core SMM Python package
+│   ├── __init__.py                # Package initialization
+│   ├── predictions.py             # SMMPrediction data structure
+│   ├── rtree_utils.py             # R-tree spatial indexing utilities
+│   └── smm.py                     # Main SMM algorithm (ILP + Greedy)
+│
+├── LICENSE                        # MIT License
+├── README.md                      # Project readme (this file)
+├── requirements.txt               # Python dependencies
+└── setup.py                       # Package installation script
+```
+
+---
+
 ## Algorithm Overview
 
 The **Spatial Mask Merging (SMM)** algorithm performs instance mask refinement by modeling predictions as nodes in a weighted graph, where edge weights express spatial and semantic consistency. The merging process is global, optimizing all candidate relations jointly instead of applying local, greedy rules.

@@ -1,14 +1,14 @@
-# spatial-mask-merging
+# Spatial Mask Merging
 Official implementation of the Spatial Mask Merging (SMM) algorithm, a post-processing algorithm designed to improve instance segmentation in high-resolution images. It addresses the limitations of traditional tiling methods by merging fragmented masks using graph clustering and spatial metrics.
 
 ---
 
 ## Highlights
-- ⚡ Spatially optimized mask merging using R-tree indexing
-- 🎯 Reduces fragmentation in high-resolution instance segmentation
-- 🧰 Lightweight and framework-agnostic implementation
-- 📦 Compatible with SAHI and other tiling-based inference pipelines
-- 🧪 Pixel-level overlap and boundary distance metrics
+- ⚡ Spatially optimized mask merging using R-tree indexing for efficient spatial queries
+- 🧩 Graph-based mask clustering for robust merging of overlapping and adjacent instances
+- 🧪 Pixel-level overlap and boundary distance metrics ensuring precise spatial consistency
+- 📦 Compatible with SAHI and other tiling-based inference pipelines for large-scale segmentation
+- 📈 Validated on the iSAID benchmark demonstrating significant precision and consistency gains
 
 ---
 
@@ -38,6 +38,8 @@ Users are permitted to use, modify, and distribute the software freely, provided
 For any use in academic, scientific, or derivative research, the citation of the original paper is strongly encouraged to acknowledge the theoretical and methodological contribution of this work.
 
 ## License
+
+MIT License
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

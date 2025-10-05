@@ -268,6 +268,13 @@ pip install optuna torch pulp rtree opencv-python-headless matplotlib
 
 ---
 
+## Project Status
+
+> **Current Version:** [v0.1.0-alpha](https://github.com/mihajlov39547/spatial-mask-merging/releases/tag/v0.1.0-alpha)  
+> ⚠️ *Prototype / early experimental release* — not fully tested, under active development.
+
+---
+
 ## Citation
 If you use this work, please cite:
 ```bibtex

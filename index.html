@@ -2,8 +2,6 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="google-site-verification" content="AeecNrtCbI01Rj3LScM_KihpBoJjv_o7upNjVwhzo0s" />
-  <meta name="msvalidate.01" content="29E047F53DC71FC859F89CFB4285584E" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="Spatial Mask Merging (SMM): ILP-based correlation clustering for spatial instance mask fusion in aerial and remote sensing imagery." />
   <meta name="keywords" content="Spatial Mask Merging, instance segmentation, correlation clustering, ILP, remote sensing, mask fusion, aerial imagery, object detection" />
@@ -11,100 +9,346 @@
   <title>Spatial Mask Merging (SMM)</title>
   <link rel="icon" href="https://github.githubassets.com/favicons/favicon.svg" type="image/svg+xml">
   <style>
-    body {
-      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      color: #222;
-      background-color: #fafafa;
-      line-height: 1.6;
-      margin: 0;
-      padding: 0;
+    :root{
+      --fg:#222; --bg:#fafafa; --ink:#0b70d1; --muted:#666; --card:#fff; --border:#e5e7eb;
+      --header:#24292e; --headerfg:#fff; --mono: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
     }
-    header {
-      background-color: #24292e;
-      color: #fff;
-      padding: 1.2rem 0;
-      text-align: center;
-    }
-    main {
-      max-width: 800px;
-      margin: 2rem auto;
-      padding: 0 1.5rem;
-    }
-    h1 {
-      text-align: center;
-      margin-top: 0;
-    }
-    a {
-      color: #0366d6;
-      text-decoration: none;
-    }
-    a:hover {
-      text-decoration: underline;
-    }
-    footer {
-      text-align: center;
-      margin-top: 2rem;
-      padding: 1rem 0;
-      font-size: 0.9rem;
-      color: #555;
-      border-top: 1px solid #ddd;
-    }
+    *{box-sizing:border-box}
+    body{font-family: system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; color:var(--fg); background:var(--bg); line-height:1.6; margin:0}
+    header{background:var(--header); color:var(--headerfg); padding:2rem 1rem; text-align:center}
+    header h1{margin:0 0 .4rem 0}
+    main{max-width:1000px; margin:2rem auto; padding:0 1.25rem}
+    h2{margin-top:2.2rem}
+    .badges img{vertical-align:middle; margin:.25rem .35rem .25rem 0}
+    a{color:var(--ink); text-decoration:none} a:hover{text-decoration:underline}
+    .card{background:var(--card); border:1px solid var(--border); border-radius:10px; padding:1.25rem; margin:1rem 0}
+    pre, code{font-family:var(--mono)}
+    pre{background:#f6f8fa; border:1px solid var(--border); border-radius:8px; padding:1rem; overflow:auto}
+    code.inline{background:#f1f5f9; padding:.1rem .35rem; border-radius:4px}
+    table{width:100%; border-collapse:collapse; margin:1rem 0}
+    th,td{border:1px solid var(--border); padding:.6rem .7rem; text-align:left}
+    tbody tr:nth-child(odd){background:#fcfcfc}
+    .toc{columns:2 300px; gap:2rem; list-style:none; padding-left:0}
+    .toc li{margin:.2rem 0}
+    footer{border-top:1px solid var(--border); color:var(--muted); text-align:center; padding:2rem 1rem; margin-top:3rem}
+    .kicker{color:#cbd5e1; margin:0}
+    .note{color:var(--muted); font-size:.95rem}
   </style>
 </head>
 <body>
   <header>
+    <p class="kicker">Paper-faithful ILP-based correlation clustering for spatial instance mask fusion</p>
     <h1>Spatial Mask Merging (SMM)</h1>
-    <p>Paper-faithful ILP-based correlation clustering for spatial instance mask fusion</p>
+    <p><strong>Marko Mihajlović</strong>, with contributions from <strong>Marina Marjanović</strong><br>
+      <em>Faculty of Informatics and Computing, Singidunum University, Belgrade, Serbia</em></p>
+    <p class="badges">
+      <a href="https://github.com/mihajlov39547/spatial-mask-merging/releases/tag/v0.1.0-alpha" target="_blank" rel="noopener">
+        <img src="https://img.shields.io/badge/release-v0.1.0--alpha-white.svg" alt="Release badge">
+      </a>
+      <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="MIT License badge">
+      <img src="https://img.shields.io/badge/python-3.8+-blue.svg" alt="Python badge">
+      <img src="https://img.shields.io/badge/DOI-10.3390/math13193079-red.svg" alt="Paper DOI badge">
+    </p>
   </header>
 
   <main>
-    <h2>Overview</h2>
-    <p>
-      <strong>Spatial Mask Merging (SMM)</strong> is an open-source implementation of ILP-based correlation clustering
-      for merging overlapping instance segmentation masks across tiled detections.
-      Designed for remote sensing and aerial imagery research, SMM provides exact optimization and evaluation tools.
-    </p>
+    <section class="card">
+      <h2 id="intro">Overview</h2>
+      <p>Official implementation of the <strong>Spatial Mask Merging (SMM)</strong> algorithm, a post‑processing method designed to improve instance segmentation in high‑resolution images. SMM addresses the limitations of tiling-based inference by merging fragmented masks using graph clustering and spatial metrics, solved either exactly via ILP correlation clustering or approximately via a greedy backend.</p>
+    </section>
 
-    <h2>Repository</h2>
-    <p>
-      Visit the full source code and documentation on GitHub:<br>
-      <a href="https://github.com/mihajlov39547/spatial-mask-merging" target="_blank">
-        github.com/mihajlov39547/spatial-mask-merging
-      </a>
-    </p>
+    <section class="card">
+      <h2 id="toc">Contents</h2>
+      <ul class="toc">
+        <li><a href="#highlights">Highlights</a></li>
+        <li><a href="#repo-structure">Repository Structure</a></li>
+        <li><a href="#algo">Algorithm Overview</a></li>
+        <li><a href="#params">Algorithm Parameters</a></li>
+        <li><a href="#merge-fn">Mask Merging Function</a></li>
+        <li><a href="#docs">Documentation</a></li>
+        <li><a href="#install">Installation</a></li>
+        <li><a href="#usage">Sample Usage</a></li>
+        <li><a href="#viz">Visualization</a></li>
+        <li><a href="#reqs">Minimal Requirements</a></li>
+        <li><a href="#status">Project Status</a></li>
+        <li><a href="#citation">Citation</a></li>
+        <li><a href="#license">License</a></li>
+        <li><a href="#ack">Acknowledgments</a></li>
+      </ul>
+    </section>
 
-    <h2>Current Release</h2>
-    <p>
-      <a href="https://github.com/mihajlov39547/spatial-mask-merging/releases/tag/v0.1.0-alpha">
-        v0.1.0-alpha — Early Experimental Release
-      </a><br>
-      Prototype version for transparency and early feedback.
-    </p>
+    <section class="card" id="highlights">
+      <h2>Highlights</h2>
+      <ul>
+        <li>⚡ Spatially optimized mask merging using <strong>R-tree</strong> indexing for efficient spatial queries</li>
+        <li>🧩 <strong>Graph-based</strong> mask clustering for robust merging of overlapping and adjacent instances</li>
+        <li>🧪 Pixel-level overlap and <strong>boundary distance</strong> metrics ensuring precise spatial consistency</li>
+        <li>🔗 <strong>Anti-chaining</strong> constraint preventing indirect merges between dissimilar objects</li>
+        <li>📦 Compatible with <strong>SAHI</strong> and other tiling-based inference pipelines for large-scale segmentation</li>
+        <li>📈 Validated on the <strong>iSAID</strong> benchmark demonstrating precision and consistency gains</li>
+      </ul>
+    </section>
 
-    <h2>Features</h2>
-    <ul>
-      <li>Exact ILP correlation clustering for instance mask merging</li>
-      <li>Evaluation tools: F1, PQ, Dice, and fragmentation metrics</li>
-      <li>Visualization and hyperparameter optimization utilities</li>
-      <li>Open MIT License for research and commercial use</li>
-    </ul>
+    <section class="card" id="repo-structure">
+      <h2>Repository</h2>
+      <p>Visit the full source code and documentation on GitHub:<br>
+        <a href="https://github.com/mihajlov39547/spatial-mask-merging" target="_blank" rel="noopener">
+          github.com/mihajlov39547/spatial-mask-merging
+        </a>
+      </p>
 
-    <h2>Citation</h2>
-    <p>
-      Marko Mihajlović, <em>Spatial Mask Merging (SMM)</em>, 2025.<br>
-      Copyright © 2025 Marko Mihajlović,
-      with contributions from Marina Marjanović.<br>
-      Licensed under the <a href="https://github.com/mihajlov39547/spatial-mask-merging/blob/main/LICENSE">MIT License</a>.
-    </p>
+      <h3>Repository Structure</h3>
+      <pre><code>spatial-mask-merging/
+│
+├── docs/                         # Documentation and supporting materials
+│   ├── algorithm_overview.md     # Algorithm description and math overview
+│   ├── changelog.md              # Version history and updates
+│   └── citation.bib              # Reference for academic citation
+│
+├── examples/                     # Example scripts and notebooks
+│
+├── smm/                          # Core SMM Python package
+│   ├── __init__.py               # Package initialization
+│   ├── predictions.py            # SMMPrediction data structure
+│   ├── rtree_utils.py            # R-tree spatial indexing utilities
+│   └── smm.py                    # Main SMM algorithm (ILP + Greedy)
+│
+├── tools/                        # Utilities (training, tuning, evaluation)
+│   ├── optimize_smm.py           # Optuna-based hyperparameter optimizer for SMM
+│   ├── visualization.py          # Visualize predictions or GT masks as PDFs
+│   └── evaluation.py             # Batch evaluator (GPU-accelerated if PyTorch is available)
+│
+├── LICENSE                       # MIT License
+├── README.md                     # Project readme (this file)
+├── requirements.txt              # Python dependencies
+└── setup.py                      # Package installation script</code></pre>
+    </section>
+
+    <section class="card" id="algo">
+      <h2>Algorithm Overview</h2>
+      <p>The <strong>Spatial Mask Merging (SMM)</strong> algorithm refines instance masks by modeling predictions as nodes in a weighted graph, where edge weights encode spatial and semantic consistency. The merging process is <em>global</em>, optimizing candidate relations jointly rather than relying on local, greedy rules.</p>
+
+      <h3>Main Components</h3>
+      <ol>
+        <li><strong>Graph Construction:</strong> Each predicted instance is a vertex. Edges connect spatial neighbors; weights combine:
+          <ul>
+            <li><em>Spatial proximity</em> — normalized by distance threshold <code class="inline">&tau;<sub>d</sub></code></li>
+            <li><em>Mask overlap (IoU)</em> — normalized by <code class="inline">&tau;<sub>i</sub></code></li>
+            <li><em>Confidence consistency</em> — uses detection scores</li>
+          </ul>
+          Pairwise weight:
+          <pre><code>w_ij = β₁ · (1 - D_ij / τ_d)_+  +  β₂ · I_ij  +  β₃ · min(s_i, s_j)</code></pre>
+          where <code class="inline">D_ij</code> is boundary distance, <code class="inline">I_ij</code> is mask IoU, and <code class="inline">s_i, s_j</code> are confidences.
+        </li>
+        <li><strong>Spatial Pruning via R-tree:</strong> Candidate neighbors within radius <code class="inline">ρ</code> are retrieved via R-tree for scalability with dense predictions.</li>
+        <li><strong>Global Optimization:</strong> Groups are found by a correlation clustering objective that balances merging vs separation via penalty <code class="inline">λ</code>. Backends: exact ILP or approximate greedy.</li>
+        <li><strong>Anti‑Chaining Constraint:</strong> Threshold <code class="inline">γ</code> prevents indirect merges of incompatible objects; all masks in a group must be mutually compatible.</li>
+      </ol>
+    </section>
+
+    <section class="card" id="params">
+      <h2>Algorithm Parameters</h2>
+      <p>Thresholds, edge weights, and penalties govern SMM behavior. <code class="inline">τ_d</code>, <code class="inline">τ_i</code>, and <code class="inline">ρ</code> affect <em>candidate generation</em>, while <code class="inline">β₁, β₂, β₃, λ, γ</code> control <em>partitioning resolution</em>. Optimal values are application‑dependent.</p>
+
+      <h3>Tunable Hyperparameters</h3>
+      <table>
+        <thead>
+          <tr><th>Parameter</th><th>Description</th><th>Suggested Range</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>τ_d</strong></td><td>Distance scale (pixels) to normalize spatial proximity in <code>w_ij</code>.</td><td>5–30</td></tr>
+          <tr><td><strong>τ_i</strong></td><td>IoU normalization threshold for overlap contribution.</td><td>0.1–0.9</td></tr>
+          <tr><td><strong>ρ</strong></td><td>R-tree search radius (pixels) for candidate edge generation.</td><td>10–50</td></tr>
+          <tr><td><strong>β₁</strong></td><td>Weight of distance term in <code>w_ij</code>.</td><td>0.2–0.4</td></tr>
+          <tr><td><strong>β₂</strong></td><td>Weight of IoU term in <code>w_ij</code>.</td><td>0.4–0.6</td></tr>
+          <tr><td><strong>β₃</strong></td><td>Weight of confidence term in <code>w_ij</code>.</td><td>0.1–0.3</td></tr>
+          <tr><td><strong>λ</strong></td><td>Correlation clustering penalty (over‑ vs under‑merging).</td><td>0.1–2.0</td></tr>
+          <tr><td><strong>γ</strong></td><td>Pairwise threshold enforcing anti‑chaining.</td><td>0.3–0.7</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card" id="merge-fn">
+      <h2>Mask Merging Function Details</h2>
+      <p>Given a valid merge group <code class="inline">A = {o₁, …, o_k}</code> with objects <code class="inline">oᵢ = (Mᵢ, bᵢ, sᵢ, ℓᵢ)</code>, the merging function <code class="inline">Φ(A)</code> returns <code class="inline">o_new = (M_new, b_new, s_new, ℓ_new)</code> as:</p>
+      <ol>
+        <li><strong>Mask Fusion:</strong> pixel‑wise logical OR of all <code>Mᵢ</code>.</li>
+        <li><strong>Bounding Box:</strong> minimal axis‑aligned rectangle enclosing all <code>bᵢ</code>.</li>
+        <li><strong>Score Aggregation:</strong> arithmetic or mask‑area‑weighted mean.</li>
+        <li><strong>Label:</strong> inherited (group members share the same class).</li>
+      </ol>
+      <h3>Properties of Φ(A)</h3>
+      <ul>
+        <li><strong>Idempotence:</strong> <code class="inline">Φ({o}) = o</code></li>
+        <li><strong>Symmetry:</strong> invariant to ordering of elements</li>
+        <li><strong>Mask Preservation:</strong> <code class="inline">⋃ Mᵢ ⊆ M_new</code></li>
+      </ul>
+      <p class="note">This consolidates spatially and semantically consistent detections into coherent instances, improving robustness of tiled inference without chained or inconsistent groupings.</p>
+    </section>
+
+    <section class="card" id="docs">
+      <h2>📘 Documentation</h2>
+      <ul>
+        <li><a href="docs/algorithm_overview.md">algorithm_overview.md</a></li>
+        <li><a href="docs/changelog.md">changelog.md</a></li>
+      </ul>
+    </section>
+
+    <section class="card" id="install">
+      <h2>🧩 Installation</h2>
+      <p>Clone this repository and install dependencies:</p>
+      <pre><code># Clone the repository
+git clone https://github.com/mihajlov39547/spatial-mask-merging.git
+cd spatial-mask-merging
+
+# (Optional) create a virtual environment
+python3 -m venv .venv
+source .venv/bin/activate  # bash
+# or
+.venv\Scripts\activate     # Windows
+
+# Install required dependencies
+pip install -r requirements.txt</code></pre>
+    </section>
+
+    <section class="card" id="usage">
+      <h2>🚀 Sample Usage</h2>
+
+      <h3>1) Core SMM (Python API)</h3>
+      <pre><code class="language-python">from smm.smm import SpatialMaskMerging
+from smm.predictions import SMMPrediction
+
+# Boolean numpy masks from your model
+mask1 = ...
+mask2 = ...
+mask3 = ...
+
+# Create prediction container
+preds = [
+    SMMPrediction(mask=mask1, score=0.91, label="car"),
+    SMMPrediction(mask=mask2, score=0.88, label="car"),
+    SMMPrediction(mask=mask3, score=0.82, label="car"),
+]
+
+# Choose backend: "ilp" (exact) or "greedy" (approximate)
+smm = SpatialMaskMerging(mode="ilp", iou_weight=1.0, dist_weight=0.5, similarity_threshold=0.4)
+
+merged = smm.merge(preds)
+for obj in merged:
+    print(obj.label, obj.score)</code></pre>
+
+      <h3>2) Hyperparameter Optimization (Optuna)</h3>
+      <p>Run the Bayesian optimizer to tune SMM hyperparameters on a directory of prediction JSONs and matching ground‑truth JSONs.</p>
+      <pre><code># From repo root
+python tools/optimize_smm.py \
+  --pred_dir /path/to/preds_json \
+  --gt_dir /path/to/gt_json \
+  --img_dir /path/to/images \
+  --out_dir ./opt_results \
+  --mode ilp \
+  --trials 30</code></pre>
+
+      <p><strong>Outputs (under <code class="inline">--out_dir</code>):</strong></p>
+      <ul>
+        <li><code>best_params_ilp.json</code> — best hyperparameters for ILP mode (filename includes mode)</li>
+        <li><code>smm_ilp_hparam_importance.json</code> and <code>.pdf</code> — parameter importances</li>
+        <li><code>smm_ilp_optuna_trials.csv</code> — trials log with metrics and timings</li>
+      </ul>
+      <p class="note">Switch <code class="inline">--mode greedy</code> to optimize the greedy backend’s parameters instead.</p>
+
+      <h3>3) Batch Evaluation</h3>
+      <p>Evaluate merged prediction JSONs against ground truth:</p>
+      <pre><code>python tools/evaluation.py \
+  --pred_dir /path/to/merged_preds_json \
+  --gt_dir /path/to/gt_json \
+  --img_dir /path/to/images \
+  --out_csv ./results/eval_ilp.csv \
+  --iou_thr 0.5 \
+  --downscale 4</code></pre>
+      <ul>
+        <li>Uses GPU if PyTorch with CUDA is available; otherwise runs on CPU.</li>
+        <li><code class="inline">--downscale</code> reduces mask resolution for speed / lower VRAM.</li>
+        <li>Metrics: Precision, Recall, F1, Dice, PQ, Avg Fragments, Count Error, Mean Error (GPU path).</li>
+      </ul>
+    </section>
+
+    <section class="card" id="viz">
+      <h2>🖼 Visualization</h2>
+      <p>Render prediction or ground‑truth polygons onto source images and export as PDFs.</p>
+      <h4>Example (predictions)</h4>
+      <pre><code>python tools/visualization.py --pred_dir /path/to/pred_jsons --image_dir /path/to/images</code></pre>
+      <h4>Example (ground truth)</h4>
+      <pre><code>python tools/visualization.py --gt_dir /path/to/gt_labels --image_dir /path/to/images</code></pre>
+      <ul>
+        <li>Saves visuals as <code class="inline">&lt;image&gt;_pred_visualization.pdf</code> or <code class="inline">_gt_visualization.pdf</code>.</li>
+        <li>Supports JSON (predictions) and TXT (labels).</li>
+        <li>Consistent colormap and class names across datasets.</li>
+      </ul>
+    </section>
+
+    <section class="card" id="reqs">
+      <h2>📦 Minimal Requirements</h2>
+      <pre><code>pip install -r requirements.txt
+# Optional extras for speed/ILP:
+pip install optuna torch pulp rtree opencv-python-headless matplotlib</code></pre>
+    </section>
+
+    <section class="card" id="status">
+      <h2>Project Status</h2>
+      <p><strong>Current Version:</strong> <a href="https://github.com/mihajlov39547/spatial-mask-merging/releases/tag/v0.1.0-alpha" target="_blank" rel="noopener">v0.1.0-alpha</a><br>
+      ⚠️ Prototype / early experimental release — not fully tested, under active development.</p>
+    </section>
+
+    <section class="card" id="citation">
+      <h2>Citation</h2>
+      <p>If you use this work, please cite:</p>
+      <pre><code>@article{mihajlovic2025enhancing,
+  title={Enhancing Instance Segmentation in High-Resolution Images Using Slicing-Aided Hyper Inference and Spatial Mask Merging Optimized via R-Tree Indexing},
+  author={Mihajlovic, Marko and Marjanovic, Marina},
+  journal={Mathematics},
+  volume={13},
+  number={19},
+  pages={3079},
+  year={2025},
+  publisher={MDPI},
+  note={(This article belongs to the Special Issue Mathematics Applications of Artificial Intelligence and Computer Vision)}
+}</code></pre>
+    </section>
+
+    <section class="card" id="license">
+      <h2>License (MIT)</h2>
+      <p>Copyright (c) 2025 Marko Mihajlović, with contributions from Marina Marjanović</p>
+      <pre><code>MIT License
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.</code></pre>
+    </section>
+
+    <section class="card" id="ack">
+      <h2>Acknowledgments</h2>
+      <p>This research was conducted as part of developing advanced post‑processing techniques for high‑resolution aerial imagery segmentation.</p>
+    </section>
   </main>
 
   <footer>
-    <p>
-      &copy; 2025 Marko Mihajlović &middot;
-      <a href="https://github.com/mihajlov39547/spatial-mask-merging">GitHub Repository</a> |
-      <a href="https://github.com/mihajlov39547/spatial-mask-merging/wiki">Wiki</a> |
-      <a href="https://github.com/mihajlov39547/spatial-mask-merging/releases">Releases</a>
-    </p>
+    <p>&copy; 2025 Marko Mihajlović · <a href="https://github.com/mihajlov39547/spatial-mask-merging" target="_blank" rel="noopener">GitHub Repository</a> ·
+       <a href="https://github.com/mihajlov39547/spatial-mask-merging/wiki" target="_blank" rel="noopener">Wiki</a> ·
+       <a href="https://github.com/mihajlov39547/spatial-mask-merging/releases" target="_blank" rel="noopener">Releases</a></p>
   </footer>
 </body>
 </html>

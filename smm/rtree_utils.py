@@ -13,12 +13,20 @@
 
 from __future__ import annotations
 from typing import Iterable, Tuple, List
+import warnings
 
 try:
     from rtree import index as _rtree_index
     _RTREE_AVAILABLE = True
 except Exception:
     _RTREE_AVAILABLE = False
+    # Warn user that fallback mode is being used
+    warnings.warn(
+        "rtree library not found. Using pure-Python fallback with O(N) query performance. "
+        "For better performance on large datasets, install: pip install rtree",
+        RuntimeWarning,
+        stacklevel=2
+    )
 
 
 BBox = Tuple[float, float, float, float]
@@ -28,11 +36,8 @@ def _bbox_intersects(a: BBox, b: BBox) -> bool:
     """Axis-aligned rectangle intersection test (inclusive edges)."""
     ax1, ay1, ax2, ay2 = a
     bx1, by1, bx2, by2 = b
-    if ax2 < bx1 or bx2 < ax1:
-        return False
-    if ay2 < by1 or by2 < ay1:
-        return False
-    return True
+    # Single compound check (micro-optimization: fewer branches)
+    return not (ax2 < bx1 or bx2 < ax1 or ay2 < by1 or by2 < ay1)
 
 
 class RTreeIndex:
@@ -45,6 +50,8 @@ class RTreeIndex:
         Insert an item id and its bounding box.
     query(bbox: BBox) -> Iterable[int]
         Return ids whose rectangles intersect the query rectangle.
+    is_optimized() -> bool
+        Returns True if using rtree library, False if using fallback.
 
     Notes
     -----
@@ -67,13 +74,19 @@ class RTreeIndex:
             self._items: List[Tuple[int, BBox]] = []
 
     def insert(self, i: int, bbox: BBox) -> None:
-        x1, y1, x2, y2 = bbox
+        """Insert an item with its bounding box into the spatial index."""
+        try:
+            x1, y1, x2, y2 = float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3])
+        except (TypeError, ValueError, IndexError) as e:
+            raise TypeError(f"Invalid bbox format: expected 4 numeric values, got {bbox}") from e
+        
         if x2 < x1 or y2 < y1:
-            raise ValueError("Invalid bbox: expected x1<=x2 and y1<=y2.")
+            raise ValueError(f"Invalid bbox geometry: expected x1<=x2 and y1<=y2, got ({x1}, {y1}, {x2}, {y2})")
+        
         if self._use_fallback:
-            self._items.append((i, (float(x1), float(y1), float(x2), float(y2))))
+            self._items.append((i, (x1, y1, x2, y2)))
         else:
-            self._idx.insert(i, (float(x1), float(y1), float(x2), float(y2)))
+            self._idx.insert(i, (x1, y1, x2, y2))
 
     def query(self, bbox: BBox) -> Iterable[int]:
         """
@@ -81,7 +94,14 @@ class RTreeIndex:
         This returns a superset of L2-within-ρ neighbors; downstream code
         should still apply any exact geometric post-filter (e.g., L2 distance).
         """
-        qx1, qy1, qx2, qy2 = bbox
+        try:
+            qx1, qy1, qx2, qy2 = float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3])
+        except (TypeError, ValueError, IndexError) as e:
+            raise TypeError(f"Invalid query bbox format: expected 4 numeric values, got {bbox}") from e
+        
+        if qx2 < qx1 or qy2 < qy1:
+            raise ValueError(f"Invalid query bbox geometry: expected x1<=x2 and y1<=y2, got ({qx1}, {qy1}, {qx2}, {qy2})")
+        
         if self._use_fallback:
             for i, bb in self._items:
                 if _bbox_intersects(bb, (qx1, qy1, qx2, qy2)):
@@ -89,3 +109,16 @@ class RTreeIndex:
         else:
             # rtree returns iterator of ids intersecting the query rectangle
             yield from self._idx.intersection((qx1, qy1, qx2, qy2))
+    
+    def is_optimized(self) -> bool:
+        """Return True if using rtree library backend, False if using pure-Python fallback."""
+        return not self._use_fallback
+    
+    def __len__(self) -> int:
+        """Return the number of items in the index (only available for fallback mode)."""
+        if self._use_fallback:
+            return len(self._items)
+        else:
+            # rtree doesn't expose size efficiently
+            # Raise NotImplementedError to indicate this operation is not supported
+            raise NotImplementedError("Size information not available when using rtree backend")

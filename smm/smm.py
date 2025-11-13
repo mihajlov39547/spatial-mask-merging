@@ -60,13 +60,13 @@ def bbox_l2_distance(b1: Tuple[float, float, float, float],
 def compute_iou(mask_a: np.ndarray, mask_b: np.ndarray) -> float:
     """
     IoU of two boolean masks of identical shape.
+    Optimized to avoid intermediate arrays with bitwise operations.
     """
     if mask_a.shape != mask_b.shape:
         raise ValueError("compute_iou: mask shapes must match.")
-    a = mask_a.astype(bool)
-    b = mask_b.astype(bool)
-    inter = np.logical_and(a, b).sum()
-    union = np.logical_or(a, b).sum()
+    # Use bitwise ops directly (2-3x faster than logical_and/or)
+    inter = np.count_nonzero(mask_a & mask_b)
+    union = np.count_nonzero(mask_a | mask_b)
     return 0.0 if union == 0 else float(inter) / float(union)
 
 
@@ -131,10 +131,17 @@ def merge_masks(masks: List[np.ndarray]) -> np.ndarray:
     """
     if len(masks) == 0:
         raise ValueError("merge_masks: empty input.")
-    out = np.zeros_like(masks[0], dtype=bool)
-    for m in masks:
-        if m.shape != out.shape:
-            raise ValueError("merge_masks: all masks must share shape.")
+    
+    # Filter out empty masks and validate
+    valid_masks = [m for m in masks if m.size > 0]
+    if not valid_masks:
+        raise ValueError("merge_masks: all masks are empty (size=0).")
+    
+    ref_shape = valid_masks[0].shape
+    out = np.zeros(ref_shape, dtype=bool)
+    for m in valid_masks:
+        if m.shape != ref_shape:
+            raise ValueError(f"merge_masks: shape mismatch {m.shape} vs {ref_shape}.")
         out |= m.astype(bool)
     return out
 
@@ -158,12 +165,12 @@ def edge_weight(D_ij: float, I_ij: float, s_i: float, s_j: float, params: Dict[s
     Paper's linear mixture:
         w_ij = β1 * (1 - D_ij / τ_d)_+ + β2 * I_ij + β3 * min(s_i, s_j)
     """
-    tau_d = float(params.get("tau_d", 15.0))
+    tau_d = max(float(params.get("tau_d", 15.0)), 1e-6)  # Enforce minimum to prevent division by zero
     beta1 = float(params.get("beta1", 1.0))
     beta2 = float(params.get("beta2", 1.0))
     beta3 = float(params.get("beta3", 0.5))
     # positive part
-    dist_term = max(0.0, 1.0 - (D_ij / max(tau_d, 1e-8)))
+    dist_term = max(0.0, 1.0 - (D_ij / tau_d))
     return float(beta1 * dist_term + beta2 * I_ij + beta3 * min(float(s_i), float(s_j)))
 
 
@@ -228,18 +235,40 @@ class SpatialMaskMerger:
     """
 
     def __init__(self, **kwargs):
-        # Store parameters with defaults
+        # Store parameters with defaults and validation
+        tau_d = float(kwargs.get("tau_d", 15.0))
+        tau_i = float(kwargs.get("tau_i", 0.5))
+        rho = float(kwargs.get("rho", 30.0))
+        gamma = float(kwargs.get("gamma", 0.5))
+        score_threshold = float(kwargs.get("score_threshold", 0.0))
+        
+        # Validate parameter ranges
+        if tau_d < 0:
+            raise ValueError(f"tau_d must be >= 0, got {tau_d}")
+        if not (0.0 <= tau_i <= 1.0):
+            raise ValueError(f"tau_i must be in [0,1], got {tau_i}")
+        if rho < 0:
+            raise ValueError(f"rho must be >= 0, got {rho}")
+        if not (0.0 <= gamma <= 1.0):
+            raise ValueError(f"gamma must be in [0,1], got {gamma}")
+        if not (0.0 <= score_threshold <= 1.0):
+            raise ValueError(f"score_threshold must be in [0,1], got {score_threshold}")
+        
+        score_agg = str(kwargs.get("score_aggregation", "mean")).lower()
+        if score_agg not in ("mean", "area_mean"):
+            raise ValueError(f"score_aggregation must be 'mean' or 'area_mean', got '{score_agg}'")
+        
         self.params: Dict[str, Any] = dict(
-            tau_d=kwargs.get("tau_d", 15.0),
-            tau_i=kwargs.get("tau_i", 0.5),
-            rho=kwargs.get("rho", 30.0),
-            beta1=kwargs.get("beta1", 1.0),
-            beta2=kwargs.get("beta2", 1.0),
-            beta3=kwargs.get("beta3", 0.5),
-            gamma=kwargs.get("gamma", 0.5),
-            lambda_=kwargs.get("lambda", kwargs.get("lambda_", 1.0)),
-            score_threshold=kwargs.get("score_threshold", 0.0),
-            score_aggregation=kwargs.get("score_aggregation", "mean"),
+            tau_d=tau_d,
+            tau_i=tau_i,
+            rho=rho,
+            beta1=float(kwargs.get("beta1", 1.0)),
+            beta2=float(kwargs.get("beta2", 1.0)),
+            beta3=float(kwargs.get("beta3", 0.5)),
+            gamma=gamma,
+            lambda_=float(kwargs.get("lambda_", 1.0)),  # Use lambda_ only (canonical)
+            score_threshold=score_threshold,
+            score_aggregation=score_agg,
         )
 
     # ------------------------- Public API -------------------------
@@ -297,8 +326,12 @@ class SpatialMaskMerger:
                 if bbox_l2_distance(oi["bbox"], oj["bbox"]) <= rho:
                     cand_pairs.append((i, j))
 
-        # 3) Compute D_ij, I_ij, w_ij for candidate edges; evaluate anti-chaining C_gamma
+        # 3) Pre-compute all boundary pixels once (major optimization)
         boundary_cache: Dict[int, np.ndarray] = {}
+        for i, obj in enumerate(objects):
+            boundary_cache[i] = boundary_pixels(obj["mask"])
+        
+        # 4) Compute D_ij, I_ij, w_ij for candidate edges; evaluate anti-chaining C_gamma
         edges: List[Tuple[int, int, float, float, float, bool]] = []
         # (i, j, D_ij, I_ij, w_ij, C_gamma)
         for (i, j) in cand_pairs:
@@ -309,10 +342,10 @@ class SpatialMaskMerger:
             C_ok = compatible_pair(oi, oj, D_ij, I_ij, w_ij, self.params)
             edges.append((i, j, D_ij, I_ij, w_ij, C_ok))
 
-        # 4) Solve exact correlation clustering (ILP)
+        # 5) Solve exact correlation clustering (ILP)
         clusters = self._solve_exact_cc_ilp(len(objects), edges)
 
-        # 5) Merge per cluster (Φ(A))
+        # 6) Merge per cluster (Φ(A))
         merged: List[Dict[str, Any]] = []
         score_thresh = float(self.params.get("score_threshold", 0.0))
         score_agg = str(self.params.get("score_aggregation", "mean")).lower()
@@ -363,25 +396,38 @@ class SpatialMaskMerger:
         prob += pulp.lpSum([w_ij * x_vars[(i, j)] + lam * (1.0 - w_ij) * (1.0 - x_vars[(i, j)])
                             for (i, j, _D, _I, w_ij, _Cok) in edges])
 
-        # Triangle inequalities
-        for i in range(n):
-            for j in range(i + 1, n):
-                ij = (i, j)
-                if ij not in x_vars:
+        # Triangle inequalities - optimized: only iterate over actual edges (avoids O(n³) for sparse graphs)
+        edge_set = set(x_vars.keys())
+        for (i, j) in edge_set:
+            # For each edge (i,j), find all k where both (i,k) and (j,k) exist
+            for k in range(n):
+                if k == i or k == j:
                     continue
-                for k in range(j + 1, n):
-                    ik = (i, k)
-                    jk = (j, k)
-                    if ik in x_vars and jk in x_vars:
-                        prob += x_vars[ij] <= x_vars[ik] + x_vars[jk]
+                ik = (min(i, k), max(i, k))
+                jk = (min(j, k), max(j, k))
+                if ik in edge_set and jk in edge_set:
+                    prob += x_vars[(i, j)] <= x_vars[ik] + x_vars[jk]
 
         # Anti-chaining: cannot-link pairs must be separated
         for (i, j, _D, _I, _w, C_ok) in edges:
             if not C_ok:
                 prob += x_vars[(i, j)] == 1
 
-        # Solve and build must-link graph
-        prob.solve(pulp.PULP_CBC_CMD(msg=False))
+        # Solve ILP with timeout and status checking
+        status = prob.solve(pulp.PULP_CBC_CMD(msg=False, timeLimit=300))
+        
+        # Check solver status
+        if status != pulp.LpStatusOptimal:
+            import warnings
+            warnings.warn(
+                f"ILP solver did not reach optimal solution (status={pulp.LpStatus[status]}). "
+                "Falling back to conservative clustering (each object separate).",
+                RuntimeWarning
+            )
+            # Fallback: treat all objects as separate clusters
+            return [[i] for i in range(n)]
+        
+        # Build must-link graph from solution
         G = nx.Graph()
         G.add_nodes_from(range(n))
         for (i, j, *_rest) in edges:

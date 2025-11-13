@@ -13,6 +13,16 @@ Official implementation of the Spatial Mask Merging (SMM) algorithm, a post-proc
 
 ---
 
+## 📺 Video Tutorial & Podcast
+
+[![Watch: Gigapixel Vision's Fatal Flaw](https://img.youtube.com/vi/qlRl8fOBEMI/maxresdefault.jpg)](https://www.youtube.com/watch?v=qlRl8fOBEMI)
+
+**[▶️ Watch on YouTube: Gigapixel Vision's Fatal Flaw - How SMM & R-Tree Indexing Fix Instance Segmentation](https://www.youtube.com/watch?v=qlRl8fOBEMI)**
+
+**[🎙️ Listen on Spotify Podcasts](https://open.spotify.com/episode/4ftIsGI2tCTQAItR1fgTYL)** - Deep dive into the algorithm, optimization strategies, and real-world applications.
+
+---
+
 ## Highlights
 - ⚡ **High Performance:** Optimized ILP solver with 50-200% speedup for typical workloads
 - 🧩 **Graph-Based Clustering:** Global optimization using correlation clustering with anti-chaining constraints

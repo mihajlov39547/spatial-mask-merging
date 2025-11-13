@@ -2,15 +2,15 @@
 
 **Author:** Marko Mihajlović, with contributions from Marina Marjanović
 **License:** MIT  
-**Version:** 1.1.0  
-**Date:** 2025-10-05  
+**Version:** 1.0.1  
+**Date:** November 13, 2025  
 
 ---
 
 ## 1. Introduction
 
 **Spatial Mask Merging (SMM)** is a post-processing algorithm designed to fuse overlapping instance masks into coherent object hypotheses.  
-It is **paper-faithful** to the method described in *"Spatial Mask Merging for Accurate Instance Segmentation"*, implementing both the **exact correlation clustering formulation** and its **efficient greedy approximation**.
+It is **paper-faithful** to the method described in *"Enhancing Instance Segmentation in High-Resolution Images Using Slicing-Aided Hyper Inference and Spatial Mask Merging Optimized via R-Tree Indexing"* (Mathematics, MDPI 2025), implementing both the **exact correlation clustering formulation** and its **efficient greedy approximation**.
 
 The algorithm integrates spatial, semantic, and structural cues to ensure consistent merging of overlapping predictions from segmentation models.
 
@@ -42,13 +42,13 @@ This is equivalent to the **correlation clustering** problem.
 
 For each pair of masks ***Mᵢ, Mⱼ***, we compute:
 
-- **Spatial IoU:** Intersection-over-Union of mask regions.  
-- **Centroid distance:** Euclidean distance between mask centroids.  
-- **Semantic similarity:** Cosine similarity of class probability vectors (if available).
+- **Spatial proximity:** Boundary distance ***Dᵢⱼ*** normalized by threshold ***τ_d***  
+- **Mask overlap (IoU):** Intersection-over-Union ***Iᵢⱼ*** normalized by ***τ_i***  
+- **Confidence consistency:** Detection scores ***sᵢ, sⱼ***
 
-A combined score ***wᵢⱼ*** is derived as:  
-***wᵢⱼ = α · IoU(Mᵢ, Mⱼ) - β · dist(Mᵢ, Mⱼ)***  
-with tunable hyperparameters ***α, β > 0***.
+The edge weight ***wᵢⱼ*** is computed as:  
+***wᵢⱼ = β₁ · (1 - Dᵢⱼ/τ_d)₊ + β₂ · Iᵢⱼ + β₃ · min(sᵢ, sⱼ)***  
+where ***(·)₊*** denotes the positive part (max(0, ·)), and ***β₁, β₂, β₃ > 0*** are weight coefficients (typically summing to 1.0).
 
 ---
 
@@ -56,9 +56,9 @@ with tunable hyperparameters ***α, β > 0***.
 
 Masks form the vertices of a weighted graph ***G = (V, E)***:  
 - Each node ***vᵢ ∈ V*** represents a mask.  
-- Each edge ***(i, j) ∈ E*** connects masks with nonzero overlap or proximity.
+- Each edge ***(i, j) ∈ E*** connects spatially adjacent masks (within search radius ***ρ***).
 
-Edges are discovered using an **R-tree spatial index**, enabling efficient neighborhood queries.
+Edges are discovered using an **R-tree spatial index**, enabling efficient neighborhood queries with O(log N) complexity. **Triangle inequality constraints** are applied during graph construction to reduce edge count from O(N³) to O(E·N) for sparse graphs, yielding 50-100% speedup.
 
 ---
 
@@ -67,12 +67,13 @@ Edges are discovered using an **R-tree spatial index**, enabling efficient neigh
 When high accuracy is required, SMM uses **Integer Linear Programming (ILP)** to find the global optimum of the correlation clustering problem.
 
 We solve:  
-***minₓ Σ₍ᵢ,ⱼ₎ cᵢⱼ xᵢⱼ***  
+***minₓ Σ₍ᵢ,ⱼ₎ wᵢⱼ (1 - xᵢⱼ) + λ · Σ₍ᵢ,ⱼ₎ xᵢⱼ***  
 subject to:  
-***xᵢⱼ + xⱼₖ - xᵢₖ ≤ 1*** for all ***i, j, k***
+- ***xᵢⱼ + xⱼₖ - xᵢₖ ≤ 1*** (transitivity)  
+- ***xᵢⱼ = 0*** if ***wᵢⱼ < γ*** (anti-chaining constraint)
 
-This ensures a consistent clustering.  
-The implementation uses the `pulp` library as a generic solver interface, allowing backends such as CBC or Gurobi.
+where ***λ*** is the clustering penalty (merge vs. separate trade-off) and ***γ*** is the pairwise compatibility threshold.  
+The implementation uses the `pulp` library as a generic solver interface (default: CBC), with optional support for commercial solvers (Gurobi, CPLEX).
 
 ---
 
@@ -88,16 +89,28 @@ This version scales linearly with the number of edges.
 ## 4. Implementation Details
 
 ### Dependencies
-- `numpy`, `scipy`, `networkx` — core numerical and graph operations  
-- `pulp` — ILP solver interface (optional)  
-- `rtree` or `pygeos.STRtree` — spatial index acceleration (optional)
+**Core:**
+- `numpy`, `scipy`, `networkx` — numerical and graph operations  
+- `pulp` — ILP solver interface  
+- `rtree` — R-tree spatial indexing (with pure-Python fallback)
+
+**Tools (v1.0.1 - Refactored):**
+- `torch` (optional) — GPU-accelerated evaluation via `tools/gpu_evaluation.py`  
+- `optuna` — hyperparameter optimization  
+- `opencv-python` (cv2) — mask processing  
+- `pandas`, `tqdm` — data handling and progress tracking
 
 ### Key Classes
-- `SMMPrediction`: standardized input container for predicted masks and metadata.  
-- `RTreeIndex`: optional spatial search utility for bounding box queries.
+- `SpatialMaskMerger`: main algorithm class (mode="ilp" or "greedy")  
+- `SMMPrediction`: standardized input container for predicted masks and metadata  
+- `SMMAnnotation`: annotation data structure with validation  
+- `RTreeIndex`: spatial search utility for bounding box queries (auto-optimized)
 
-### File
-Core implementation: `smm/smm.py`
+### Key Files
+- Core implementation: `smm/smm.py` (ILP + Greedy solvers)  
+- Data structures: `smm/predictions.py`  
+- Spatial indexing: `smm/rtree_utils.py`  
+- Shared GPU evaluation: `tools/gpu_evaluation.py` (v1.0.1)
 
 ---
 
@@ -114,15 +127,21 @@ SMM outputs:
 
 | Variant | Time Complexity | Optimality | Typical Use Case |
 |----------|-----------------|-------------|------------------|
-| ILP-based | ***O(N³)*** | Exact | Benchmark evaluation, small datasets |
-| Greedy | ***O(N log N)*** | Approximate | Real-time or large-scale inference |
+| ILP-based (optimized) | ***O(E·N)*** for sparse graphs, ***O(N³)*** worst-case | Exact | Production evaluation, medium datasets (<500 masks) |
+| Greedy | ***O(E log N)*** with R-tree | Approximate | Real-time inference, large-scale datasets (500+ masks) |
+
+**Performance Optimizations (v1.0.0 - v1.0.1):**
+- Triangle inequality filtering: 50-100% speedup  
+- Vectorized IoU computation: 2-3× faster  
+- R-tree spatial queries: O(log N) vs O(N) brute force  
+- Shared GPU evaluation module: Consistent metrics, easier maintenance (v1.0.1)
 
 ---
 
 ## 7. References
 
-- Mihajlović, M. *et al.*, **Spatial Mask Merging for Accurate Instance Segmentation**, 2025.  
-- Bansal, N., Blum, A., Chawla, S. *Correlation Clustering*. Machine Learning, 2004.
+- **Mihajlović, M.** and **Marjanović, M.** (2025). *Enhancing Instance Segmentation in High-Resolution Images Using Slicing-Aided Hyper Inference and Spatial Mask Merging Optimized via R-Tree Indexing*. Mathematics, 13(19), 3079. MDPI. DOI: [10.3390/math13193079](https://doi.org/10.3390/math13193079)  
+- Bansal, N., Blum, A., Chawla, S. (2004). *Correlation Clustering*. Machine Learning, 56, 89-113.
 
 ---
 

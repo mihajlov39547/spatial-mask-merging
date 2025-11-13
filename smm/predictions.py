@@ -79,6 +79,16 @@ class SMMPrediction:
         )
         ann.validate()
         self.annotations.append(ann)
+    
+    def validate_all(self) -> None:
+        """Validate all annotations in this prediction. Raises ValueError if any are invalid."""
+        if not self.image_name:
+            raise ValueError("image_name cannot be empty")
+        for i, ann in enumerate(self.annotations):
+            try:
+                ann.validate()
+            except ValueError as e:
+                raise ValueError(f"Invalid annotation at index {i}: {e}") from e
 
     def to_json_dict(self) -> Dict[str, Any]:
         """
@@ -147,9 +157,16 @@ class SMMPrediction:
         -------
         list of dicts ready for SpatialMaskMerger.merge(...)
         """
-        H, W = int(image_size_hw[0]), int(image_size_hw[1])
+        # Validate image_size_hw format and values
+        try:
+            if len(image_size_hw) != 2:
+                raise ValueError(f"image_size_hw must have exactly 2 elements, got {len(image_size_hw)}")
+            H, W = int(image_size_hw[0]), int(image_size_hw[1])
+        except (TypeError, IndexError) as e:
+            raise TypeError(f"image_size_hw must be a tuple/list of 2 integers, got {type(image_size_hw)}") from e
+        
         if H <= 0 or W <= 0:
-            raise ValueError("to_smm_objects: image_size_hw must be positive (H, W).")
+            raise ValueError(f"to_smm_objects: image_size_hw must be positive (H, W), got ({H}, {W})")
 
         objs: List[Dict[str, Any]] = []
         for ann in self.annotations:
@@ -197,7 +214,10 @@ class SMMPrediction:
                           image_size_hw: SizeHW,
                           min_polygon_points: int = 3) -> np.ndarray:
         """
-        Rasterize a set of polygons into a union mask.
+        Rasterize a set of polygons into a union mask using PIL.
+        
+        Note: PIL Image creation has overhead. For batch processing of many annotations,
+        consider pre-allocating or using vectorized operations.
         """
         H, W = image_size_hw
         img = Image.new(mode="1", size=(W, H), color=0)
@@ -213,13 +233,15 @@ class SMMPrediction:
     def _bbox_to_mask(bbox: BBox, image_size_hw: SizeHW) -> np.ndarray:
         """
         Create a rectangular mask from a bbox (inclusive bounds).
+        Uses floor for proper pixel alignment (coordinates are continuous, pixels are discrete).
         """
         H, W = image_size_hw
         x1, y1, x2, y2 = bbox
-        xi1 = max(0, int(np.floor(x1)))
-        yi1 = max(0, int(np.floor(y1)))
-        xi2 = min(W - 1, int(np.floor(x2)))
-        yi2 = min(H - 1, int(np.floor(y2)))
+        # Floor coordinates to get pixel indices (optimized: direct int() for non-negative)
+        xi1 = max(0, int(x1) if x1 >= 0 else int(np.floor(x1)))
+        yi1 = max(0, int(y1) if y1 >= 0 else int(np.floor(y1)))
+        xi2 = min(W - 1, int(x2) if x2 >= 0 else int(np.floor(x2)))
+        yi2 = min(H - 1, int(y2) if y2 >= 0 else int(np.floor(y2)))
         mask = np.zeros((H, W), dtype=bool)
         if xi2 >= xi1 and yi2 >= yi1:
             mask[yi1:yi2 + 1, xi1:xi2 + 1] = True
@@ -227,8 +249,14 @@ class SMMPrediction:
 
     @staticmethod
     def _tight_bbox_from_mask(mask: np.ndarray) -> BBox:
+        """
+        Compute tight bounding box from a binary mask.
+        Returns (0, 0, 0, 0) for empty masks (degenerate case).
+        """
         ys, xs = np.nonzero(mask)
         if ys.size == 0:
+            # Empty mask: return degenerate bbox at origin
+            # Note: This is a valid but zero-area bbox
             return (0.0, 0.0, 0.0, 0.0)
         y1, y2 = int(ys.min()), int(ys.max())
         x1, x2 = int(xs.min()), int(xs.max())

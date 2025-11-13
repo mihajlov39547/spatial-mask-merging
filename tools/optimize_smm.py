@@ -4,25 +4,26 @@ SMM Hyperparameter Optimizer (Optuna)
 
 Bayesian optimization of Spatial Mask Merging (SMM) hyperparameters using Optuna.
 
-Adapts the user's SMM-GRAPH optimizer to the repository structure:
-- Uses `smm.smm.SpatialMaskMerging` as the backend (mode: "ilp" or "greedy").
-- Converts polygon annotations to binary masks and back.
-- Evaluates with a pluggable metric function; falls back to a simple F1.
+Adapts the SMM optimizer to the repository structure:
+- Uses `smm.smm.SpatialMaskMerger` as the backend (ILP-based correlation clustering).
+- Converts polygon annotations to binary masks via SMMPrediction container.
+- Evaluates with a simple F1 metric (greedy IoU matching).
 - Saves best params and feature importances.
 
 Place this file at: `tools/optimize_smm.py` (or anywhere you prefer).
 
 Requirements
 ------------
-pip install optuna numpy pandas tqdm opencv-python-headless networkx matplotlib
+pip install optuna numpy pandas tqdm opencv-python-headless networkx matplotlib pulp rtree
 (Optionally) pip install torch rtree pulp
 
-Edit the CONFIG paths below before running.
+Note: CUDA/GPU acceleration is not used in SMM optimization itself (the ILP solver and 
+mask operations run on CPU). GPU is only beneficial for the separate evaluation script.
 
 Usage
 -----
 python tools/optimize_smm.py --pred_dir <dir-with-pred-json> --gt_dir <dir-with-gt-json> \
-  --out_dir ./opt_results --mode ilp --trials 30
+  --img_dir <dir-with-images> --out_dir ./opt_results --trials 30
 """
 
 from __future__ import annotations
@@ -45,7 +46,7 @@ import optuna
 import pandas as pd
 from tqdm import tqdm
 
-# --- Optional (used if present) ---
+# --- Optional (not used in SMM optimization, only for external evaluation) ---
 try:
     import torch
     USE_CUDA = torch.cuda.is_available()
@@ -62,9 +63,9 @@ except Exception:
 
 # --- Repo imports ---
 # Expecting these modules in your repository:
-#   smm.smm -> SpatialMaskMerging class
+#   smm.smm -> SpatialMaskMerger class
 #   smm.predictions -> SMMPrediction dataclass/container
-from smm.smm import SpatialMaskMerging
+from smm.smm import SpatialMaskMerger
 from smm.predictions import SMMPrediction
 
 
@@ -73,7 +74,7 @@ from smm.predictions import SMMPrediction
 # =====================
 DEFAULTS = dict(
     method="smm",            # identifier tag
-    mode="ilp",              # "ilp" or "greedy"
+    mode="ilp",              # always "ilp" (SpatialMaskMerger uses ILP)
     subset_per_trial=0,      # 0 = use all files
     n_trials=30,             # number of Optuna trials
 )
@@ -167,25 +168,33 @@ def run_smm_on_entry(entry: Dict[str, Any], img_dir: str, mode: str, params: Dic
     H, W = img.shape[:2]
     image_size = (H, W)
 
-    preds: List[SMMPrediction] = []
+    # Create single SMMPrediction container for the image
+    prediction = SMMPrediction(image_name=image_name)
     for ann in entry.get("annotations", []):
         label = ann.get("type", ann.get("label", "object"))
+        class_id = ann.get("class_id", 0)
         score = float(ann.get("confidence", ann.get("score", 1.0)))
         seg = ann.get("segmentation", [])
         if not seg:
             continue
         polygons = seg if isinstance(seg[0][0], list) else [seg]
-        mask = polygons_to_mask(polygons, image_size)
-        if mask.sum() == 0:
-            continue
-        preds.append(SMMPrediction(mask=mask, score=score, label=label))
+        
+        # Add annotation to SMMPrediction
+        bbox = ann.get("bbox", [0, 0, 0, 0])
+        prediction.add_annotation(
+            type=label,
+            class_id=class_id,
+            confidence=score,
+            bbox=tuple(bbox) if len(bbox) == 4 else (0, 0, 0, 0),
+            segmentation=polygons
+        )
 
-    smm = SpatialMaskMerging(mode=mode, **params)
+    smm = SpatialMaskMerger(**params)
     tracemalloc.start()
     tracemalloc.reset_peak()
     t0 = time.time()
 
-    merged = smm.merge(preds)  # expected to return objects with fields: mask, score, label
+    merged = smm.merge(prediction, image_size_hw=image_size)  # returns list of dicts with mask, bbox, score, label
 
     exec_time = time.time() - t0
     _, peak_mem = tracemalloc.get_traced_memory()
@@ -193,15 +202,17 @@ def run_smm_on_entry(entry: Dict[str, Any], img_dir: str, mode: str, params: Dic
 
     cleaned_annotations = []
     for obj in merged:
-        poly = mask_to_polygons(obj.mask if hasattr(obj, "mask") else obj["mask"])
+        # obj is a dict with keys: mask, bbox, score, label
+        poly = mask_to_polygons(obj["mask"])
         if not poly:
             continue
-        bbox = _get_bbox_from_mask(obj.mask if hasattr(obj, "mask") else obj["mask"])
-        score = float(getattr(obj, "score", obj.get("score", 1.0)))
-        label = getattr(obj, "label", obj.get("label", "object"))
+        bbox = obj["bbox"]  # already computed by SMM
+        score = float(obj["score"])
+        label = obj["label"]
         cleaned_annotations.append({
-            "type": label,
-            "bbox": bbox,
+            "type": str(label),
+            "class_id": int(label) if isinstance(label, (int, np.integer)) else 0,
+            "bbox": [int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3])],
             "segmentation": poly,
             "confidence": score
         })
@@ -226,20 +237,36 @@ def _get_bbox_from_mask(mask: np.ndarray) -> List[int]:
 # OPTUNA SUGGESTIONS
 # =====================
 def suggest_params(trial: optuna.trial.Trial, mode: str) -> Dict[str, Any]:
-    """Hyperparameters commonly exposed by SMM; adjust to match your implementation."""
+    """
+    Hyperparameters for SpatialMaskMerger based on paper parameters.
+    
+    Parameters match the SMM paper:
+    - tau_d: distance threshold (pixels)
+    - tau_i: IoU threshold
+    - rho: R-tree search radius (pixels)
+    - beta1: distance weight in edge weight formula
+    - beta2: IoU weight in edge weight formula
+    - beta3: confidence weight in edge weight formula
+    - gamma: anti-chaining threshold
+    - lambda_: correlation clustering penalty
+    """
     params = {
-        # similarity weights
-        "iou_weight": trial.suggest_float("iou_weight", 0.2, 1.5),
-        "dist_weight": trial.suggest_float("dist_weight", 0.1, 1.0),
-        # thresholds
-        "similarity_threshold": trial.suggest_float("similarity_threshold", 0.2, 0.8),
-        # geometry
-        "max_neighbor_distance": trial.suggest_int("max_neighbor_distance", 8, 48, step=4),
+        # Spatial thresholds
+        "tau_d": trial.suggest_float("tau_d", 5.0, 30.0),
+        "tau_i": trial.suggest_float("tau_i", 0.1, 0.9),
+        "rho": trial.suggest_float("rho", 10.0, 50.0),
+        
+        # Edge weight coefficients
+        "beta1": trial.suggest_float("beta1", 0.2, 0.4),
+        "beta2": trial.suggest_float("beta2", 0.4, 0.6),
+        "beta3": trial.suggest_float("beta3", 0.1, 0.3),
+        
+        # Anti-chaining threshold
+        "gamma": trial.suggest_float("gamma", 0.3, 0.7),
+        
+        # Correlation clustering penalty
+        "lambda_": trial.suggest_float("lambda_", 0.1, 2.0, log=True),
     }
-    if mode == "ilp":
-        params.update({
-            "lambda_cc": trial.suggest_float("lambda_cc", 0.1, 2.0, log=True),
-        })
     return params
 
 
@@ -334,7 +361,7 @@ def parse_args():
     p.add_argument("--gt_dir", required=True, help="Directory with GT JSON files")
     p.add_argument("--img_dir", required=True, help="Directory with the corresponding raw images (for shape)")
     p.add_argument("--out_dir", default="./opt_results", help="Where to store artifacts")
-    p.add_argument("--mode", default=DEFAULTS["mode"], choices=["ilp", "greedy"], help="SMM backend")
+    p.add_argument("--mode", default=DEFAULTS["mode"], choices=["ilp"], help="SMM backend (only ILP supported)")
     p.add_argument("--subset_per_trial", type=int, default=DEFAULTS["subset_per_trial"])
     p.add_argument("--trials", type=int, default=DEFAULTS["n_trials"])
     p.add_argument("--seed", type=int, default=42)

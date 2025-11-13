@@ -1,6 +1,17 @@
+# Core dependencies
 numpy>=1.23
 scipy>=1.10
 networkx>=3.0
 pulp>=2.7
 rtree>=1.1.0
 Pillow>=9.0.0
+
+# Tools dependencies
+opencv-python-headless>=4.8.0
+pandas>=2.0.0
+tqdm>=4.65.0
+optuna>=3.0.0
+matplotlib>=3.7.0
+
+# Optional: for GPU-accelerated evaluation
+# torch>=2.0.0

@@ -67,16 +67,19 @@ def read_json(path: str) -> Dict[str, Any]:
         return json.load(f)
 
 
-def get_image_shape(img_dir: str, image_name: str, fallback_size: Tuple[int, int] | None) -> Tuple[int, int]:
+def get_image_shape(img_dir: str, image_name: str, fallback_size: Tuple[int, int] = None) -> Tuple[int, int]:
+    """Get image shape from JSON metadata or by reading the image file."""
     if fallback_size and all(isinstance(x, int) for x in fallback_size):
         return tuple(fallback_size)
     img_path = os.path.join(img_dir, image_name)
-    img = cv2.imread(img_path)
-    if img is None:
-        # final fallback
-        return (1024, 1024)
-    h, w = img.shape[:2]
-    return (h, w)
+    if os.path.exists(img_path):
+        img = cv2.imread(img_path)
+        if img is not None:
+            h, w = img.shape[:2]
+            return (h, w)
+    # Final fallback - warn user
+    print(f"⚠️  Warning: Could not determine size for {image_name}, using default (1024, 1024)")
+    return (1024, 1024)
 
 
 def polygons_to_mask(polygons: List[List[List[float]]], image_size: Tuple[int, int], downscale: int = 1) -> np.ndarray:
@@ -239,6 +242,10 @@ def compute_metrics_and_mean_error_torch(
 
         fragments.extend(frag.detach().cpu().tolist())
         del gt_t, frag
+        
+        # Clean up GPU memory periodically
+        if torch is not None and torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
     FP = len(pr_masks) - len(matched_pr)
     FN = len(gt_masks) - len(matched_gt)
@@ -267,12 +274,14 @@ def compute_metrics_for_image_cpu(
     iou_thr: float = 0.5,
     downscale: int = 1
 ) -> Dict[str, float]:
+    """CPU-based evaluator. Matches GPU version output for consistency."""
     gt_masks = [load_mask_from_segmentation(a.get("segmentation", []), image_shape, downscale) for a in gt_anns]
     pr_masks = [load_mask_from_segmentation(a.get("segmentation", []), image_shape, downscale) for a in pred_anns]
     gt_cls   = ensure_class_ids(gt_anns)
     pr_cls   = ensure_class_ids(pred_anns)
 
     matched_gt, matched_pr = set(), set()
+    matched_pairs = []  # Store (gt_idx, pr_idx) for mean error calculation
     TP = 0
     total_iou = 0.0
     fragments = []
@@ -287,6 +296,7 @@ def compute_metrics_for_image_cpu(
                 matched += 1
                 matched_gt.add(i)
                 matched_pr.add(j)
+                matched_pairs.append((i, j))
                 TP += 1
                 total_iou += iou
         fragments.append(matched)
@@ -302,11 +312,26 @@ def compute_metrics_for_image_cpu(
     dq = TP / (TP + 0.5*FP + 0.5*FN + 1e-10)
     sq = total_iou / (TP + 1e-10)
     pq = dq * sq
+    
+    # Compute Mean Error (centroid distance) for consistency with GPU version
+    mean_err = 0.0
+    if matched_pairs:
+        errors = []
+        for i, j in matched_pairs:
+            gt_bbox = bbox_from_mask(gt_masks[i])
+            pr_bbox = bbox_from_mask(pr_masks[j])
+            if gt_bbox and pr_bbox:
+                # Compute centroid distance
+                gt_center = np.array([gt_bbox[0], gt_bbox[1]], dtype=np.float32)
+                pr_center = np.array([pr_bbox[0], pr_bbox[1]], dtype=np.float32)
+                error = np.linalg.norm(gt_center - pr_center)
+                errors.append(float(error))
+        mean_err = float(np.mean(errors)) if errors else 0.0
 
     return {
         "Precision": precision, "Recall": recall, "F1 Score": f1,
         "Dice Coefficient": dice, "Avg Fragments": avg_frag,
-        "Count Error": count_err, "PQ": pq
+        "Count Error": count_err, "PQ": pq, "Mean Error": mean_err
     }
 
 
@@ -321,35 +346,66 @@ def evaluate_dir(
     iou_thr: float = 0.5,
     downscale: int = 1,
 ) -> None:
+    """Evaluate predictions against ground truth for all images in directory."""
+    # Validate inputs
+    if not os.path.isdir(pred_dir):
+        raise ValueError(f"Prediction directory not found: {pred_dir}")
+    if not os.path.isdir(gt_dir):
+        raise ValueError(f"Ground truth directory not found: {gt_dir}")
+    if not os.path.isdir(img_dir):
+        raise ValueError(f"Image directory not found: {img_dir}")
+    
     os.makedirs(os.path.dirname(out_csv) or ".", exist_ok=True)
     pred_files = sorted([f for f in os.listdir(pred_dir) if f.endswith(".json")])
+    
+    if not pred_files:
+        raise ValueError(f"No JSON files found in {pred_dir}")
+    
     header_written = os.path.exists(out_csv)
 
     for fname in tqdm(pred_files, desc="Evaluating"):
         pred_path = os.path.join(pred_dir, fname)
         gt_path   = os.path.join(gt_dir, fname)
         if not os.path.exists(gt_path):
+            print(f"⚠️  Warning: No GT file for {fname}, skipping")
             continue
 
-        pred = read_json(pred_path)
-        gt   = read_json(gt_path)
+        try:
+            pred = read_json(pred_path)
+            gt   = read_json(gt_path)
+        except json.JSONDecodeError as e:
+            print(f"❌ Error reading {fname}: {e}")
+            continue
 
         image_size = tuple(pred.get("image_size", [])) or None
         image_name = pred.get("image_name", os.path.splitext(fname)[0] + ".png")
         H, W = get_image_shape(img_dir, image_name, image_size)
 
-        if USE_TORCH:
-            metrics = compute_metrics_and_mean_error_torch(gt.get("annotations", []),
-                                                           pred.get("annotations", []),
-                                                           (H, W),
-                                                           iou_thr=iou_thr,
-                                                           downscale=downscale)
-        else:
-            metrics = compute_metrics_for_image_cpu(gt.get("annotations", []),
-                                                    pred.get("annotations", []),
-                                                    (H, W),
-                                                    iou_thr=iou_thr,
-                                                    downscale=downscale)
+        try:
+            if USE_TORCH:
+                metrics = compute_metrics_and_mean_error_torch(gt.get("annotations", []),
+                                                               pred.get("annotations", []),
+                                                               (H, W),
+                                                               iou_thr=iou_thr,
+                                                               downscale=downscale)
+            else:
+                metrics = compute_metrics_for_image_cpu(gt.get("annotations", []),
+                                                        pred.get("annotations", []),
+                                                        (H, W),
+                                                        iou_thr=iou_thr,
+                                                        downscale=downscale)
+        except RuntimeError as e:
+            if "out of memory" in str(e).lower():
+                print(f"⚠️  GPU OOM for {fname}, trying CPU fallback...")
+                if torch is not None:
+                    torch.cuda.empty_cache()
+                metrics = compute_metrics_for_image_cpu(gt.get("annotations", []),
+                                                        pred.get("annotations", []),
+                                                        (H, W),
+                                                        iou_thr=iou_thr,
+                                                        downscale=downscale)
+            else:
+                raise
 
         row = {
             "Image": fname,

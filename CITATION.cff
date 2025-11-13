@@ -35,9 +35,9 @@ keywords:
 preferred-citation:
   type: article
   authors:
-    - family-names: "Mihajlović"
+    - family-names: "Mihajlovic"
       given-names: "Marko"
-    - family-names: "Marjanović"
+    - family-names: "Marjanovic"
       given-names: "Marina"
   title: "Enhancing Instance Segmentation in High-Resolution Images Using Slicing-Aided Hyper Inference and Spatial Mask Merging Optimized via R-Tree Indexing"
   journal: "Mathematics"
@@ -45,7 +45,9 @@ preferred-citation:
   issue: 19
   year: 2025
   start: 3079
+  identifiers:
+    - type: doi
+      value: "10.3390/math13193079"
   publisher:
     name: "MDPI"
-  doi: "10.3390/math13193079"
-  url: "https://doi.org/10.3390/math13193079"
+  url: "https://www.mdpi.com/2227-7390/13/19/3079"

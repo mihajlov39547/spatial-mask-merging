@@ -44,6 +44,7 @@ spatial-mask-merging/
 │   └── smm.py                     # Main SMM algorithm (ILP + Greedy)
 │
 ├── tools/                        # Utilities (training, tuning, evaluation)
+│   ├── gpu_evaluation.py         # Shared GPU evaluation module (used by all tools)
 │   ├── optimize_smm.py           # Optuna-based hyperparameter optimizer for SMM
 │   ├── visualization.py          # Visualize predictions or GT masks as PDFs for qualitative inspection
 │   └── evaluation.py             # Batch evaluator (GPU-accelerated if PyTorch is available)
@@ -264,7 +265,12 @@ python tools/optimize_smm.py \
 - `smm_ilp_hparam_importance.json/.pdf` — parameter importance analysis
 - `smm_ilp_optuna_trials.csv` — complete trial history
 
-**Note:** SMM uses ILP-based correlation clustering (CPU-bound). CUDA is not used during optimization.
+**Performance:**
+- Uses shared `gpu_evaluation.py` module for consistent evaluation with `evaluation.py`
+- GPU-accelerated evaluation (10-50× faster than CPU)
+- ILP solver remains CPU-bound by design
+
+**Note:** SMM uses ILP-based correlation clustering (CPU-bound). GPU acceleration applies only to evaluation metrics.
 
 ---
 
@@ -294,12 +300,14 @@ python tools/evaluation.py \
 - **GPU mode** (with PyTorch+CUDA): 10-50× faster, 500MB-2GB VRAM
 - **CPU mode** (fallback): 1-5 sec/image, 100-500MB RAM
 - **Downscaling**: `--downscale 4` reduces memory by 16× with minimal accuracy loss
+- **Architecture**: Uses shared `gpu_evaluation.py` module for consistent evaluation logic
 
 **Features:**
 - ✅ Automatic GPU→CPU fallback on OOM
 - ✅ Robust error handling (skips corrupted files)
 - ✅ Progress tracking with tqdm
 - ✅ Consistent metrics across CPU/GPU modes
+- ✅ Shared evaluation code with optimization tools (DRY architecture)
 
 ---
 
@@ -371,6 +379,7 @@ python -c "import torch; print('CUDA:', torch.cuda.is_available())"
 | **Optimization** | Optuna | - | 5-30 min/trial | ✅ Robust |
 | **Evaluation (GPU)** | PyTorch | O(N²) | 0.1-0.5 sec/image | ✅ Memory-efficient |
 | **Evaluation (CPU)** | NumPy | O(N²) | 1-5 sec/image | ✅ Consistent |
+| **Shared Module** | gpu_evaluation.py | - | - | ✅ DRY architecture |
 
 *N = number of predicted masks per image, E = number of candidate edges*
 
@@ -428,11 +437,13 @@ python -c "import torch; print('CUDA:', torch.cuda.is_available())"
 - ✅ Added `is_optimized()` introspection method
 - ✅ Query bbox validation to prevent malformed queries
 
-**Tools (`optimize_smm.py`, `evaluation.py`, `visualization.py`):**
+**Tools (`optimize_smm.py`, `evaluation.py`, `gpu_evaluation.py`, `visualization.py`):**
+- ✅ Refactored duplicate GPU code into shared `gpu_evaluation.py` module (~500 lines eliminated)
 - ✅ Fixed API usage to match core implementation
 - ✅ Added GPU memory management (torch.cuda.empty_cache())
 - ✅ Improved error handling and user feedback
 - ✅ Better input validation and progress reporting
+- ✅ DRY architecture: single source of truth for GPU evaluation logic
 
 **Package (`__init__.py`):**
 - ✅ Clean namespace - internal modules not exposed

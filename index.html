@@ -35,8 +35,9 @@
         "@type": "SoftwareSourceCode",
         "name": "Spatial Mask Merging (SMM)",
         "description": "Production-ready Python library for merging fragmented instance segmentation predictions using correlation clustering with R-tree spatial indexing. Designed for high-resolution imagery with enterprise-grade performance.",
-        "version": "1.0.0",
+        "version": "1.0.1",
         "datePublished": "2025-11-13",
+        "dateModified": "2025-11-13",
         "programmingLanguage": "Python",
         "runtimePlatform": "Python 3.8+",
         "codeRepository": "https://github.com/mihajlov39547/spatial-mask-merging",
@@ -180,8 +181,8 @@
     <p><strong>Marko Mihajlović</strong>, with contributions from <strong>Marina Marjanović</strong><br>
       <em>Faculty of Informatics and Computing, Singidunum University, Belgrade, Serbia</em></p>
     <div class="badges">
-      <a href="https://github.com/mihajlov39547/spatial-mask-merging/releases/tag/v1.0.0" target="_blank" rel="noopener">
-        <img src="https://img.shields.io/badge/release-v1.0.0-brightgreen.svg?style=for-the-badge" alt="Release v1.0.0">
+      <a href="https://github.com/mihajlov39547/spatial-mask-merging/releases/tag/v1.0.1" target="_blank" rel="noopener">
+        <img src="https://img.shields.io/badge/release-v1.0.1-brightgreen.svg?style=for-the-badge" alt="Release v1.0.1">
       </a>
       <img src="https://img.shields.io/badge/Status-Production--Ready-success.svg?style=for-the-badge" alt="Production Ready">
       <img src="https://img.shields.io/badge/Code_Quality-A+-gold.svg?style=for-the-badge" alt="Code Quality A+">
@@ -221,7 +222,11 @@
       </div>
 
       <div class="highlight-box">
-        <p><strong>🎯 Production Status:</strong> Version 1.0.0 represents a fully tested, optimized, and documented solution ready for deployment in demanding production environments. All core algorithms validated, performance benchmarked, and API stabilized.</p>
+        <p><strong>🎯 Production Status:</strong> Version 1.0.1 delivers enhanced maintainability through code refactoring while maintaining full backward compatibility. All tools now share GPU evaluation logic, eliminating ~500 lines of duplicate code and ensuring consistent behavior across the codebase.</p>
+      </div>
+
+      <div class="highlight-box" style="background:#f0fdf4; border-left-color:#22c55e;">
+        <p><strong>🆕 v1.0.1 Improvements:</strong> Refactored tools module with shared <code class="inline">gpu_evaluation.py</code> module (403 lines). Reduced <code class="inline">evaluation.py</code> by 55% and <code class="inline">optimize_smm.py</code> by 41% through DRY architecture. Zero breaking changes, all tests passing. <a href="https://github.com/mihajlov39547/spatial-mask-merging/releases/tag/v1.0.1" target="_blank" rel="noopener">View release notes →</a></p>
       </div>
     </section>
 
@@ -251,6 +256,7 @@
         <li><strong>Dual Solving Backends:</strong> Exact ILP solver (PuLP) or fast greedy approximation for scalability trade-offs</li>
         <li><strong>Anti-Chaining Constraint:</strong> Prevents inconsistent merges via pairwise compatibility enforcement</li>
         <li><strong>GPU-Accelerated Evaluation:</strong> CUDA-enabled batch evaluation with automatic CPU fallback</li>
+        <li><strong>Shared Evaluation Module (v1.0.1):</strong> DRY architecture with centralized GPU evaluation logic (~500 lines eliminated)</li>
         <li><strong>Hyperparameter Optimization:</strong> Bayesian tuning via Optuna with importance analysis and trial logging</li>
         <li><strong>Comprehensive Validation:</strong> Input validation, type hints, error handling, and batch verification methods</li>
         <li><strong>Rich Visualization:</strong> PDF rendering with polygon overlays, class labels, and confidence scores</li>
@@ -339,6 +345,7 @@
 │   └── rtree_utils.py            # R-tree spatial indexing with fallback
 │
 ├── tools/                        # Production utilities
+│   ├── gpu_evaluation.py         # Shared GPU evaluation module (v1.0.1)
 │   ├── optimize_smm.py           # Optuna hyperparameter tuning
 │   ├── evaluation.py             # GPU-accelerated batch evaluation
 │   └── visualization.py          # PDF rendering with overlays
@@ -348,6 +355,7 @@
 │   ├── test_predictions_*.py    # Data structure tests
 │   ├── test_rtree_*.py           # Spatial indexing tests
 │   ├── test_init_*.py            # API tests
+│   ├── test_refactored_tools.py # Refactoring validation (v1.0.1)
 │   └── verify_readme_claims.py  # Production readiness validation
 │
 ├── docs/                         # Documentation
@@ -606,6 +614,15 @@ python tools/visualization.py \
     <section class="card" id="tools">
       <h2>🛠 Tools & Utilities</h2>
 
+      <h3>gpu_evaluation.py — Shared GPU Module (v1.0.1)</h3>
+      <ul>
+        <li><strong>Purpose:</strong> Centralized GPU evaluation utilities for all tools (DRY architecture)</li>
+        <li><strong>Functions:</strong> compute_metrics_gpu(), compute_metrics_cpu(), load_mask_from_segmentation()</li>
+        <li><strong>Features:</strong> Adaptive VRAM chunking, vectorized mask IoU, automatic GPU/CPU fallback</li>
+        <li><strong>Constants:</strong> CHUNK_P=1024, CHUNK_G=256, IOU_THRESHOLD=0.5, DOWNSCALE_FACTOR=4</li>
+        <li><strong>Benefits:</strong> Single source of truth, consistent metrics, easier maintenance</li>
+      </ul>
+
       <h3>optimize_smm.py — Hyperparameter Tuning</h3>
       <ul>
         <li><strong>Backend:</strong> Optuna (Tree-structured Parzen Estimator)</li>
@@ -613,6 +630,7 @@ python tools/visualization.py \
         <li><strong>Objective:</strong> Maximize F1 score on validation set</li>
         <li><strong>Outputs:</strong> Best params JSON, importance analysis (JSON/PDF), trial history CSV</li>
         <li><strong>Features:</strong> Parallel trials, timeout handling, mode-specific naming</li>
+        <li><strong>Architecture (v1.0.1):</strong> Uses shared gpu_evaluation module (361 lines, -41% code)</li>
       </ul>
 
       <h3>evaluation.py — Batch Evaluation</h3>
@@ -622,6 +640,7 @@ python tools/visualization.py \
         <li><strong>Metrics:</strong> Precision, Recall, F1, Dice, PQ, fragment count, count error, MAE</li>
         <li><strong>Scalability:</strong> Downscaling support for large images, batch processing</li>
         <li><strong>Output:</strong> Per-image CSV with all metrics and timing statistics</li>
+        <li><strong>Architecture (v1.0.1):</strong> Uses shared gpu_evaluation module (207 lines, -55% code)</li>
       </ul>
 
       <h3>visualization.py — Rendering</h3>
@@ -708,7 +727,7 @@ SOFTWARE.</code></pre>
   </main>
 
   <footer>
-    <p><strong>Spatial Mask Merging (SMM) v1.0.0</strong> — Production-Ready Instance Segmentation Post-Processing</p>
+    <p><strong>Spatial Mask Merging (SMM) v1.0.1</strong> — Production-Ready Instance Segmentation Post-Processing</p>
     <p>&copy; 2025 Marko Mihajlović · 
        <a href="https://github.com/mihajlov39547/spatial-mask-merging" target="_blank" rel="noopener">GitHub Repository</a> ·
        <a href="https://github.com/mihajlov39547/spatial-mask-merging/wiki" target="_blank" rel="noopener">Wiki</a> ·

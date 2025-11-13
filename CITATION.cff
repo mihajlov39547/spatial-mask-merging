@@ -8,21 +8,44 @@ authors:
     affiliation: "Faculty of Informatics and Computing, Singidunum University, Belgrade, Serbia"
   - family-names: "Marjanović"
     given-names: "Marina"
-    affiliation: "Contributor"
-version: "0.1.0-alpha"
+    affiliation: "Faculty of Informatics and Computing, Singidunum University, Belgrade, Serbia"
+version: "1.0.1"
 license: "MIT"
 repository-code: "https://github.com/mihajlov39547/spatial-mask-merging"
 url: "https://mihajlov39547.github.io/spatial-mask-merging/"
 abstract: >
-  Spatial Mask Merging (SMM) is an open-source implementation of ILP-based correlation clustering
-  for merging overlapping instance segmentation masks across tiled detections. Designed for remote
-  sensing and aerial imagery research, SMM provides exact optimization and evaluation tools.
-date-released: "2025-10-05"
+  Production-ready Python library for merging fragmented instance segmentation predictions using 
+  correlation clustering with R-tree spatial indexing. Designed for high-resolution imagery 
+  (aerial, satellite, medical), SMM delivers enterprise-grade performance with GPU acceleration, 
+  comprehensive testing, and optimized algorithms. Features exact ILP solver and fast greedy 
+  approximation, achieving 50-200% speedup over baseline implementations.
+date-released: "2025-11-13"
 keywords:
   - instance segmentation
   - mask merging
   - correlation clustering
   - ILP
-  - remote sensing
+  - R-tree indexing
+  - GPU acceleration
+  - high-resolution imagery
+  - aerial imagery
   - object detection
   - spatial analysis
+  - production-ready
+preferred-citation:
+  type: article
+  authors:
+    - family-names: "Mihajlović"
+      given-names: "Marko"
+    - family-names: "Marjanović"
+      given-names: "Marina"
+  title: "Enhancing Instance Segmentation in High-Resolution Images Using Slicing-Aided Hyper Inference and Spatial Mask Merging Optimized via R-Tree Indexing"
+  journal: "Mathematics"
+  volume: 13
+  issue: 19
+  year: 2025
+  start: 3079
+  publisher:
+    name: "MDPI"
+  doi: "10.3390/math13193079"
+  url: "https://doi.org/10.3390/math13193079"

@@ -9,11 +9,11 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 ### Planned
-- Integration of GPU-accelerated ILP solvers
-- Optional PyTorch interface for end-to-end differentiable merging
-- Extended benchmark suite with public datasets
-- Paper reproduction scripts and metrics report generator
-- Configuration file for GPU constants (CHUNK_P, CHUNK_G, etc.)
+- **Configuration file for GPU constants:** YAML/JSON config for CHUNK_P, CHUNK_G, IOU_THRESHOLD, DOWNSCALE_FACTOR (allows users to tune GPU memory usage without code changes)
+- **Extended benchmark suite:** Automated evaluation on public datasets (iSAID, COCO, Cityscapes) with standardized metrics
+- **Paper reproduction scripts:** Complete pipeline to reproduce paper figures, tables, and experimental results with documented hyperparameters
+- **Performance profiling tools:** Benchmarking suite with detailed timing breakdowns and memory usage analysis
+- **Enhanced visualization:** Interactive HTML reports for evaluation results with per-image metrics and error analysis
 
 ---
 

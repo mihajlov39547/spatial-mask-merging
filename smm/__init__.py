@@ -11,7 +11,7 @@ __all__ = [
     "SMMAnnotation",
 ]
 
-__version__ = "0.1.0"
+__version__ = "1.0.0"
 
 # Clean up namespace: remove internal module references
 # This prevents pollution of the public API with implementation details

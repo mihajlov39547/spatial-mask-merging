@@ -5,7 +5,6 @@
 # License: MIT
 
 import os
-import sys
 import json
 import argparse
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple, Union
@@ -196,6 +195,11 @@ def process_gt_folder(
     out_suffix: str = "_gt_visualization.pdf",
     **kwargs,
 ) -> None:
+    """Process all image+label pairs in a folder for GT visualization."""
+    if not os.path.isdir(folder_path):
+        raise ValueError(f"Folder not found: {folder_path}")
+    
+    processed_count = 0
     for fname in os.listdir(folder_path):
         if not fname.lower().endswith(suffix_image):
             continue
@@ -203,7 +207,13 @@ def process_gt_folder(
         image_path = os.path.join(folder_path, fname)
         label_path = os.path.join(folder_path, base + ".txt")
         output_pdf = os.path.join(folder_path, base + out_suffix)
-        draw_gt_polygons_on_image(image_path, label_path, output_pdf, **kwargs)
+        try:
+            draw_gt_polygons_on_image(image_path, label_path, output_pdf, **kwargs)
+            processed_count += 1
+        except Exception as e:
+            print(f"⚠️  Error processing {fname}: {e}")
+    
+    print(f"\n✅ Processed {processed_count} GT image(s)")
 
 
 # =========================
@@ -232,8 +242,16 @@ def draw_prediction_json(
     fill_alpha: float = 0.0,
     font_scale: float = 0.6,
 ) -> None:
-    with open(json_path, "r") as f:
-        data = json.load(f)
+    """Visualize predictions from JSON file onto the corresponding image."""
+    try:
+        with open(json_path, "r") as f:
+            data = json.load(f)
+    except json.JSONDecodeError as e:
+        print(f"❌ Invalid JSON in {json_path}: {e}")
+        return
+    except FileNotFoundError:
+        print(f"❌ JSON file not found: {json_path}")
+        return
 
     image_name = data.get("image_name")
     annotations = data.get("annotations", [])
@@ -294,15 +312,29 @@ def process_prediction_folders(
     out_ext: str = ".pdf",
     **kwargs,
 ) -> None:
+    """Process all JSON prediction files in a directory tree."""
+    # Validate inputs
+    if not os.path.isdir(pred_base_dir):
+        raise ValueError(f"Prediction directory not found: {pred_base_dir}")
+    if not os.path.isdir(image_dir):
+        raise ValueError(f"Image directory not found: {image_dir}")
+    
+    processed_count = 0
     for root, dirs, files in os.walk(pred_base_dir):
         for fname in files:
             if not fname.lower().endswith(".json"):
                 continue
             json_path = os.path.join(root, fname)
             out_path = os.path.splitext(json_path)[0] + f"_pred_visualization{out_ext}"
-            draw_prediction_json(json_path, image_dir, output_path=out_path, **kwargs)
+            try:
+                draw_prediction_json(json_path, image_dir, output_path=out_path, **kwargs)
+                processed_count += 1
+            except Exception as e:
+                print(f"⚠️  Error processing {fname}: {e}")
         if not recursive:
             break
+    
+    print(f"\n✅ Processed {processed_count} prediction file(s)")
 
 
 # =========================
